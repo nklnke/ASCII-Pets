@@ -79,3 +79,38 @@ export function isHungry(s: PetStats): boolean {
 export function isSleepy(s: PetStats): boolean {
   return s.energy <= SLEEPY_AT;
 }
+
+// Poop mechanics (simple variant): after each meal the pet may leave a pile
+// with POOP_CHANCE. While a pile is present the pet's mood rots via tickDirty.
+// Cleanup itself lives in the renderer (pile element + click handler).
+
+/** Chance to drop a pile after one feeding. */
+export const POOP_CHANCE = 0.35;
+/** Mood points lost per minute while a pile is present. */
+export const DIRTY_MOOD_PER_MIN = 4;
+/** Mood points regained for cleaning up. */
+export const CLEANUP_MOOD_BONUS = 5;
+
+/** Deterministic roll: pass Math.random() from the caller (testable). */
+export function rollPoop(r: number): boolean {
+  return r < POOP_CHANCE;
+}
+
+/** Mood rot while a poop pile is present (one pile per pet max). */
+export function tickDirty(s: PetStats, elapsedMin: number, now: number): PetStats {
+  if (elapsedMin <= 0) return { ...s, updatedAt: now };
+  return {
+    ...s,
+    mood: clamp(s.mood - elapsedMin * DIRTY_MOOD_PER_MIN),
+    updatedAt: now,
+  };
+}
+
+/** Clicking the pile cleans it up and cheers the pet a little. */
+export function cleanPoop(s: PetStats, now: number): PetStats {
+  return {
+    ...s,
+    mood: clamp(s.mood + CLEANUP_MOOD_BONUS),
+    updatedAt: now,
+  };
+}

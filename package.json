@@ -7,9 +7,9 @@
   "scripts": {
     "build:main": "tsc",
     "check": "tsc --noEmit -p tsconfig.check.json",
-    "build:renderer": "esbuild src/renderer/renderer.ts --bundle --format=iife --outfile=dist/renderer/renderer.js && node -e \"require('fs').mkdirSync('dist/renderer',{recursive:true});require('fs').copyFileSync('src/renderer/index.html','dist/renderer/index.html')\"",
+    "build:renderer": "esbuild src/renderer/renderer.ts --bundle --format=iife --outfile=dist/renderer/renderer.js && esbuild src/renderer/status.ts --bundle --format=iife --outfile=dist/renderer/status.js && node -e \"require('fs').mkdirSync('dist/renderer',{recursive:true});require('fs').copyFileSync('src/renderer/index.html','dist/renderer/index.html');require('fs').copyFileSync('src/renderer/status.html','dist/renderer/status.html')\"",
     "build": "npm run build:main && npm run check && npm run build:renderer",
-    "test": "npm run build:main && node --test test/pet-stats.test.mjs test/placement.test.mjs test/skins.test.mjs test/temperament.test.mjs test/color.test.mjs test/notify.test.mjs",
+    "test": "npm run build:main && node --test test/pet-stats.test.mjs test/placement.test.mjs test/skins.test.mjs test/temperament.test.mjs test/color.test.mjs test/notify.test.mjs test/social.test.mjs",
     "dev": "node scripts/dev.js",
     "start": "npm run build && electron .",
     "dist": "npm run build && electron-builder --win nsis portable"
@@ -20,6 +20,7 @@
     "directories": {
       "output": "release"
     },
+    "afterPack": "scripts/after-pack.js",
     "files": [
       "dist/**/*",
       "assets/icon.png",
@@ -38,6 +39,9 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "shortcutName": "ASCII Pets"
+    },
+    "portable": {
+      "artifactName": "${productName} ${version} Portable.${ext}"
     }
   },
   "keywords": [],
@@ -46,6 +50,7 @@
     "electron-updater": "^6.6.2"
   },
   "devDependencies": {
+    "@electron/fuses": "^2.1.3",
     "@types/node": "^26.6.2",
     "electron": "^44.4.3",
     "electron-builder": "^26.15.3",

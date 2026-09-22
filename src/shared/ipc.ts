@@ -7,6 +7,11 @@ export interface PetSnapshot {
   hunger: number;
   mood: number;
   energy: number;
+  /** True while this pet has an uncleaned poop pile. Optional for compat. */
+  dirty?: boolean;
+  /** Lifetime counters (shown in the status window). Optional for compat. */
+  pets?: number;
+  meals?: number;
   /** Text origin of this pet's grid in window coords (x + padding, top + padding + jump/bob). */
   ox: number;
   oy: number;

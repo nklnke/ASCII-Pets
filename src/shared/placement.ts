@@ -26,15 +26,17 @@ export function detectTaskbarEdge(bounds: Rect, workArea: Rect): TaskbarEdge {
 }
 
 /**
- * Full-width strip hugging the taskbar edge.
+ * Full-width strip glued to the taskbar edge.
+ * The window bottom sits flush with the work-area bottom (= the taskbar's
+ * top edge): pets stand exactly on it and every jump starts from it.
  * For vertical (left/right) taskbars the horizontal strip stays at the
  * bottom — it doesn't conflict with a side taskbar.
  */
-export function stripBounds(bounds: Rect, workArea: Rect, petH: number, margin: number): Rect {
+export function stripBounds(bounds: Rect, workArea: Rect, petH: number): Rect {
   const edge = detectTaskbarEdge(bounds, workArea);
   const y =
     edge === "top"
-      ? bounds.y + margin
-      : bounds.y + bounds.height - petH - margin;
+      ? workArea.y
+      : workArea.y + workArea.height - petH;
   return { x: bounds.x, y, width: bounds.width, height: petH };
 }

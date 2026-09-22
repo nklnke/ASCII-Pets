@@ -38,3 +38,25 @@ export function skinMoves(id: string): Locomotion {
 export function skinSound(id: string): string {
   return SKIN_LIST.find((s) => s.id === id)?.petSound ?? "*mur*";
 }
+
+export interface StyleMeta {
+  id: string;
+  name: string;
+}
+
+export const STYLE_LIST: StyleMeta[] = [
+  { id: "ascii1", name: "ASCII 1 — классика" },
+  { id: "ascii2", name: "ASCII 2 — блоки" },
+  { id: "ascii3", name: "ASCII 3 — тамагочи" },
+];
+
+export const DEFAULT_STYLE = "ascii1";
+
+/** Normalize a style id from settings/menu/IPC (pack-wide). */
+export function normalizeStyle(style: unknown): string {
+  return typeof style === "string" && STYLE_LIST.some((s) => s.id === style) ? style : DEFAULT_STYLE;
+}
+
+export function styleName(id: string): string {
+  return STYLE_LIST.find((s) => s.id === id)?.name ?? id;
+}

@@ -18,10 +18,14 @@
   #stage .pet {
     position: absolute;
     left: 0;
-    top: 24px;
+    /* Bottom-anchored flush with the window bottom (= the taskbar's top
+       edge): skins keep native heights (cat 4, dog 6, frog 4) and still
+       stand on one ground line. Vertical motion (jump/bob) is translateY
+       on top of this anchor. */
+    bottom: 0;
     display: inline-block;
     margin: 0;
-    padding: 8px;
+    padding: 8px 8px 0;
     font-family: "Cascadia Mono", Consolas, monospace;
     font-size: calc(15px * var(--pet-scale));
     line-height: 1.15;
@@ -29,42 +33,67 @@
     text-shadow: 0 0 4px #000, 1px 1px 0 #000;
     cursor: pointer;
     white-space: pre;
-    /* transform is rewritten every walk tick; transition turns 33ms steps
-       into smooth gliding + soft bobbing/jump arcs. Ink color transitions
-       keep auto-inversion from flashing on every sample. */
-    transition: transform 120ms linear, color 300ms linear, text-shadow 300ms linear;
+    /* Position is written every animation frame (rAF, dt-based): no transform
+       transition, so the compositor never chases a moving target (judder +
+       ghost trails on transparent windows). Ink transitions stay so
+       auto-inversion fades instead of flashing on every sample. */
+    transition: color 300ms linear, text-shadow 300ms linear;
+    will-change: transform;
   }
-  #stage .pet.dragging {
-    transition: none;
+  /* Poop pile: the wrap is floor-anchored (bottom: 0 = taskbar top edge),
+     the pile sits on the ground line, grey stink waves curl above it.
+     Fixed inks — no per-cell inversion for the pile. */
+  #stage .poop-wrap {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    margin: 0;
+    padding: 8px 8px 0;
+    cursor: pointer;
+  }
+  #stage .poop {
+    margin: 0;
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: calc(15px * var(--pet-scale));
+    line-height: 1.15;
+    color: #c98a4b;
+    text-shadow: 0 0 4px #000, 1px 1px 0 #000;
+    white-space: pre;
+  }
+  #stage .stink {
+    margin: 0;
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: calc(15px * var(--pet-scale));
+    line-height: 1.15;
+    color: #8f8f9a;
+    text-shadow: 0 0 4px #000, 1px 1px 0 #000;
+    white-space: pre;
+  }
+  /* Pixel style (ascii3): one shared silhouette for the pile + waves. */
+  #stage .poop-wrap.flat {
+    filter: drop-shadow(1px 1px 0 #000);
+  }
+  #stage .poop-wrap.flat .poop,
+  #stage .poop-wrap.flat .stink {
+    text-shadow: none;
+  }
+  /* Pixel style (ascii3): glyphs fuse into one blob, so per-glyph
+     text-shadow turns to mud — one shared silhouette instead. */
+  #stage .pet.flat {
+    text-shadow: none;
+    filter: drop-shadow(1px 1px 0 #000);
+  }
+  #stage .pet.flat span {
+    text-shadow: none;
   }
   /* Per-glyph ink: each symbol carries its own inverted color. */
   #stage .pet span {
     transition: color 300ms linear, text-shadow 300ms linear;
   }
-  #msg {
-    font-family: Consolas, monospace;
-    font-size: 12px;
-    color: #ffd97a;
-    text-shadow: 1px 1px 0 #000;
-    padding: 0 8px;
-    min-height: 16px;
-  }
-  #stats {
-    font-family: Consolas, monospace;
-    font-size: 11px;
-    color: #9ad7ff;
-    text-shadow: 1px 1px 0 #000;
-    padding: 0 8px;
-    min-height: 15px;
-    opacity: 0.9;
-    white-space: pre-line;
-  }
 </style>
 </head>
 <body>
 <div id="stage"></div>
-<div id="msg"></div>
-<div id="stats"></div>
 <script src="./renderer.js"></script>
 </body>
 </html>

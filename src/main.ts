@@ -6,7 +6,7 @@ import type { PetSnapshot } from "./shared/ipc";
 import { HUNGRY_AT } from "./shared/pet-stats";
 import { shouldNotifyHunger } from "./shared/notify";
 import { stripBounds } from "./shared/placement";
-import { SKIN_LIST, normalizePack } from "./shared/skins";
+import { SKIN_LIST, normalizePack, STYLE_LIST, normalizeStyle, DEFAULT_STYLE } from "./shared/skins";
 
 let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -24,12 +24,19 @@ let petScale = 1;
 const PET_SCALES = [0.85, 1, 1.3, 1.6];
 /** Pack = skin id per pet slot; renderer mirrors it. */
 let pack: string[] = ["cat"];
+/** Drawing style for the whole pack (ASCII1 classic / ASCII2 blocks). */
+let style: string = DEFAULT_STYLE;
+/** Floating status window (free placement, hideable). Owned by main. */
+let statusWin: BrowserWindow | null = null;
+let showStatus = true;
+let statusPos: { x: number; y: number } | null = null;
+/** Latest toast line from the strip (mirrored into the status window). */
+let lastMsg = "";
 /** Latest snapshot pushed by the renderer (for the tray tooltip + sampler). */
 let lastStats: PetSnapshot[] = [];
 let sampler: NodeJS.Timeout | null = null;
 
-const PET_H = 180;
-const BOTTOM_MARGIN = 8;
+const PET_H = 200;
 const SAMPLE_EVERY_MS = 1000;
 /** Screen capture size for the sampler (once/sec; bigger = more unique px per cell). */
 const THUMB_W = 960;
@@ -42,10 +49,13 @@ interface AppSettings {
   onTop?: boolean;
   openAtLogin?: boolean;
   pack?: string[];
+  style?: string;
   colorMode?: boolean;
   notifyHungry?: boolean;
   muted?: boolean;
   petScale?: number;
+  showStatus?: boolean;
+  statusPos?: { x?: number; y?: number };
 }
 
 function settingsPath(): string {
@@ -75,7 +85,18 @@ function loadSettings(): void {
   if (typeof s.notifyHungry === "boolean") notifyHungry = s.notifyHungry;
   if (typeof s.muted === "boolean") muted = s.muted;
   if (typeof s.petScale === "number" && PET_SCALES.includes(s.petScale)) petScale = s.petScale;
+  if (typeof s.showStatus === "boolean") showStatus = s.showStatus;
+  if (
+    s.statusPos &&
+    typeof s.statusPos.x === "number" &&
+    typeof s.statusPos.y === "number" &&
+    isFinite(s.statusPos.x) &&
+    isFinite(s.statusPos.y)
+  ) {
+    statusPos = { x: Math.round(s.statusPos.x), y: Math.round(s.statusPos.y) };
+  }
   if (s.pack !== undefined) pack = normalizePack(s.pack);
+  if (s.style !== undefined) style = normalizeStyle(s.style);
 }
 
 function saveSettings(): void {
@@ -83,7 +104,7 @@ function saveSettings(): void {
     fs.mkdirSync(path.dirname(settingsPath()), { recursive: true });
     fs.writeFileSync(
       settingsPath(),
-      JSON.stringify({ onTop, openAtLogin, pack, colorMode, notifyHungry, muted, petScale }),
+      JSON.stringify({ onTop, openAtLogin, pack, style, colorMode, notifyHungry, muted, petScale, showStatus, statusPos }),
     );
   } catch {
     // Settings are best-effort; the app works without them.
@@ -106,12 +127,13 @@ function assetPath(file: string): string {
   return path.join(__dirname, "..", "assets", file);
 }
 
-// Full-width transparent strip hugging the taskbar edge of the primary
-// display. Overlaying via bounds (not workArea) keeps the pet "on" the
-// taskbar; edge detection keeps it correct for top/side taskbars too.
+// Full-width transparent strip glued to the taskbar edge of the primary
+// display. The window bottom sits flush with the work-area bottom (= the
+// taskbar's top edge), so the pet floor is exactly on it and every jump
+// starts from it; edge detection keeps it correct for top/side taskbars too.
 function stripRect(): { x: number; y: number; width: number; height: number } {
   const primary = screen.getPrimaryDisplay();
-  return stripBounds(primary.bounds, primary.workArea, PET_H, BOTTOM_MARGIN);
+  return stripBounds(primary.bounds, primary.workArea, PET_H);
 }
 
 function applyAlwaysOnTop(): void {
@@ -150,7 +172,7 @@ function stopSampler(): void {
  * character cell — accuracy over smoothness, no neighbor blending.
  */
 async function sampleBackdrop(): Promise<void> {
-  if (!colorMode || !win || win.isDestroyed()) return;
+  if (!colorMode || !win || win.isDestroyed() || lastStats.length === 0) return;
   try {
     const sources = await desktopCapturer.getSources({
       types: ["screen"],
@@ -244,6 +266,13 @@ function setPack(skins: string[]): void {
   if (win && !win.isDestroyed()) win.webContents.send("set-pack", pack);
 }
 
+function setStyle(next: string): void {
+  style = normalizeStyle(next);
+  saveSettings();
+  refreshTrayMenu();
+  if (win && !win.isDestroyed()) win.webContents.send("set-style", style);
+}
+
 function setMuted(m: boolean): void {
   muted = m;
   saveSettings();
@@ -259,7 +288,7 @@ function setPetScale(scale: number): void {
   if (win && !win.isDestroyed()) win.webContents.send("set-scale", petScale);
 }
 
-function sendToRenderer(channel: "pet-action" | "pet-feed"): void {
+function sendToRenderer(channel: "pet-action" | "pet-feed" | "pet-clean-poop"): void {
   if (win && !win.isDestroyed()) win.webContents.send(channel);
 }
 
@@ -335,6 +364,17 @@ function menuTemplate(): MenuItemConstructorOptions[] {
         ),
       ],
     },
+    {
+      label: "Стиль",
+      submenu: STYLE_LIST.map(
+        (s): MenuItemConstructorOptions => ({
+          label: s.name,
+          type: "radio",
+          checked: style === s.id,
+          click: () => setStyle(s.id),
+        }),
+      ),
+    },
     { type: "separator" },
     {
       label: "Пауза",
@@ -354,6 +394,12 @@ function menuTemplate(): MenuItemConstructorOptions[] {
         saveSettings();
         applyAlwaysOnTop();
       },
+    },
+    {
+      label: "Окно статуса",
+      type: "checkbox",
+      checked: showStatus,
+      click: (item) => setShowStatus(item.checked),
     },
     {
       label: "Авто-инверсия",
@@ -415,7 +461,10 @@ function updateTrayTooltip(): void {
     return;
   }
   const line = lastStats
-    .map((s) => `${s.label}: сыт ${100 - s.hunger}, наст ${s.mood}, эн ${s.energy}`)
+    .map(
+      (s) =>
+        `${s.label}: сыт ${Math.round(100 - s.hunger)}, наст ${Math.round(s.mood)}, эн ${Math.round(s.energy)}${s.dirty ? " · грязно!" : ""}`,
+    )
     .join(" · ");
   tray.setToolTip(`ASCII Pets — ${line}`);
 }
@@ -485,6 +534,7 @@ function createWindow(): void {
   win = new BrowserWindow({
     ...b,
     transparent: true,
+    backgroundColor: "#00000000",
     frame: false,
     alwaysOnTop: true,
     skipTaskbar: true,
@@ -529,6 +579,88 @@ function placeWindow(startled: boolean): void {
   if (startled) win.webContents.send("pet-startle");
 }
 
+const STATUS_W = 300;
+const STATUS_H = 260;
+
+/** First-launch spot: bottom-right, just above the pet strip. */
+function defaultStatusPos(): { x: number; y: number } {
+  const wa = screen.getPrimaryDisplay().workArea;
+  return {
+    x: Math.round(wa.x + wa.width - STATUS_W - 12),
+    y: Math.round(wa.y + wa.height - STATUS_H - PET_H - 24),
+  };
+}
+
+/** Clamp into the primary work area (survives monitor changes); keep a grab handle visible. */
+function clampStatusPos(p: { x: number; y: number }): { x: number; y: number } {
+  const wa = screen.getPrimaryDisplay().workArea;
+  return {
+    x: Math.min(Math.max(p.x, wa.x - STATUS_W + 80), wa.x + wa.width - 80),
+    y: Math.min(Math.max(p.y, wa.y), wa.y + wa.height - 40),
+  };
+}
+
+/** Free-floating status card: bars, counters, last toast, close button.
+ *  Unlike the strip it is a normal interactive window (no click-through). */
+function createStatusWindow(): void {
+  const pos = clampStatusPos(statusPos ?? defaultStatusPos());
+  statusWin = new BrowserWindow({
+    x: pos.x,
+    y: pos.y,
+    width: STATUS_W,
+    height: STATUS_H,
+    transparent: true,
+    backgroundColor: "#00000000",
+    frame: false,
+    resizable: false,
+    movable: true,
+    focusable: false,
+    skipTaskbar: true,
+    hasShadow: false,
+    icon: iconPath(),
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  statusWin.setAlwaysOnTop(true, "screen-saver");
+  statusWin.setMenu(null);
+  void statusWin.loadFile(path.join(__dirname, "renderer", "status.html"));
+  statusWin.webContents.on("did-finish-load", () => {
+    if (!statusWin || statusWin.isDestroyed()) return;
+    statusWin.webContents.send("status-update", lastStats);
+    if (lastMsg) statusWin.webContents.send("status-msg", lastMsg);
+  });
+  // Free position persists (debounced — `move` fires continuously on Windows).
+  let saveTimer: NodeJS.Timeout | null = null;
+  statusWin.on("move", () => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      if (!statusWin || statusWin.isDestroyed()) return;
+      const [x, y] = statusWin.getPosition();
+      statusPos = { x, y };
+      saveSettings();
+    }, 500);
+  });
+  statusWin.on("closed", () => {
+    statusWin = null;
+  });
+}
+
+function setShowStatus(v: boolean): void {
+  showStatus = v;
+  saveSettings();
+  refreshTrayMenu();
+  if (v) {
+    if (!statusWin || statusWin.isDestroyed()) createStatusWindow();
+    else statusWin.show();
+  } else if (statusWin && !statusWin.isDestroyed()) {
+    statusWin.hide();
+  }
+}
+
 void app.whenReady().then(() => {
   // Required for Windows toast notifications (dev + portable need it explicit).
   try {
@@ -546,6 +678,7 @@ void app.whenReady().then(() => {
   applyOpenAtLogin();
   createWindow();
   createTray();
+  if (showStatus) createStatusWindow();
   setupAutoUpdate();
   if (colorMode) startSampler();
 
@@ -556,6 +689,7 @@ void app.whenReady().then(() => {
   });
   ipcMain.on("show-context-menu", () => showContextMenu());
   ipcMain.handle("get-pack", () => pack);
+  ipcMain.handle("get-style", () => style);
   ipcMain.handle("get-muted", () => muted);
   ipcMain.handle("get-scale", () => petScale);
   ipcMain.on("pet-stats", (_event, snapshot: typeof lastStats) => {
@@ -565,15 +699,36 @@ void app.whenReady().then(() => {
       );
       updateTrayTooltip();
       maybeNotifyHunger();
+      if (statusWin && !statusWin.isDestroyed()) statusWin.webContents.send("status-update", lastStats);
     }
   });
+  // Toast relay: the strip forwards showMsg lines, main mirrors them to status.
+  ipcMain.on("pet-msg", (_event, text: unknown) => {
+    if (typeof text !== "string" || text.length === 0) return;
+    lastMsg = text;
+    if (statusWin && !statusWin.isDestroyed()) statusWin.webContents.send("status-msg", text);
+  });
+  ipcMain.on("status-hide", () => setShowStatus(false));
+  // Status window action buttons: same broadcast as the tray menu (whole pack).
+  ipcMain.on("status-pat", () => sendToRenderer("pet-action"));
+  ipcMain.on("status-feed", () => sendToRenderer("pet-feed"));
+  ipcMain.on("status-clean-poop", () => sendToRenderer("pet-clean-poop"));
 
   // Pet lives on the primary display; re-hug the taskbar edge whenever
   // displays or their metrics change (resolution, scale, taskbar move).
   // The world shifting under its feet startles the pet a little.
-  screen.on("display-metrics-changed", () => placeWindow(true));
-  screen.on("display-added", () => placeWindow(true));
-  screen.on("display-removed", () => placeWindow(true));
+  // display-metrics-changed fires in bursts — regroup so it startles once.
+  let metricsTimer: NodeJS.Timeout | null = null;
+  const onDisplayChanged = (): void => {
+    if (metricsTimer) clearTimeout(metricsTimer);
+    metricsTimer = setTimeout(() => {
+      metricsTimer = null;
+      placeWindow(true);
+    }, 500);
+  };
+  screen.on("display-metrics-changed", onDisplayChanged);
+  screen.on("display-added", onDisplayChanged);
+  screen.on("display-removed", onDisplayChanged);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -586,6 +741,8 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   stopSampler();
+  if (statusWin && !statusWin.isDestroyed()) statusWin.destroy();
+  statusWin = null;
   if (tray && !tray.isDestroyed()) tray.destroy();
   tray = null;
 });

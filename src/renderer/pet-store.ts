@@ -64,6 +64,39 @@ export function saveStats(slot: number, s: PetStats): void {
   }
 }
 
+// Poop pile persistence: just the horizontal position per slot (one pile max).
+// A stored pile survives restarts — the mess waits for you.
+function poopKey(slot: number): string {
+  return `ascii-pets:poop:v1:slot${slot}`;
+}
+
+export function loadPoop(slot: number): number | null {
+  try {
+    const raw = localStorage.getItem(poopKey(slot));
+    if (!raw) return null;
+    const x = JSON.parse(raw) as number;
+    return typeof x === "number" && isFinite(x) && x >= 0 ? x : null;
+  } catch {
+    return null;
+  }
+}
+
+export function savePoop(slot: number, x: number): void {
+  try {
+    localStorage.setItem(poopKey(slot), JSON.stringify(x));
+  } catch {
+    // Same as stats — the pile just won't survive a restart. Fine.
+  }
+}
+
+export function clearPoop(slot: number): void {
+  try {
+    localStorage.removeItem(poopKey(slot));
+  } catch {
+    // Nothing to clean. Fine.
+  }
+}
+
 /** Periodic autosave; returns a stop function. */
 export function startAutosave(getAll: () => Array<{ slot: number; stats: PetStats }>): () => void {
   const id = setInterval(() => {

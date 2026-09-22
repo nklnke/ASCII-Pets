@@ -18,11 +18,17 @@ contextBridge.exposeInMainWorld("petAPI", {
   pushStats: (snapshot: PetSnapshot[]): void => {
     ipcRenderer.send("pet-stats", snapshot);
   },
+  pushMsg: (text: string): void => {
+    ipcRenderer.send("pet-msg", text);
+  },
   onPetAction: (cb: () => void): void => {
     ipcRenderer.on("pet-action", () => cb());
   },
   onPetFeed: (cb: () => void): void => {
     ipcRenderer.on("pet-feed", () => cb());
+  },
+  onPetCleanPoop: (cb: () => void): void => {
+    ipcRenderer.on("pet-clean-poop", () => cb());
   },
   onPetGreet: (cb: () => void): void => {
     ipcRenderer.on("pet-greet", () => cb());
@@ -32,6 +38,12 @@ contextBridge.exposeInMainWorld("petAPI", {
   },
   onSetPack: (cb: (skins: string[]) => void): void => {
     ipcRenderer.on("set-pack", (_event, skins: string[]) => cb(skins));
+  },
+  getStyle: (): Promise<string> => {
+    return ipcRenderer.invoke("get-style");
+  },
+  onSetStyle: (cb: (style: string) => void): void => {
+    ipcRenderer.on("set-style", (_event, style: string) => cb(style));
   },
   onSetColorMode: (cb: (on: boolean) => void): void => {
     ipcRenderer.on("set-color-mode", (_event, on: boolean) => cb(on));
@@ -50,5 +62,23 @@ contextBridge.exposeInMainWorld("petAPI", {
   },
   onSetScale: (cb: (scale: number) => void): void => {
     ipcRenderer.on("set-scale", (_event, scale: number) => cb(scale));
+  },
+  onStatusUpdate: (cb: (snapshots: PetSnapshot[]) => void): void => {
+    ipcRenderer.on("status-update", (_event, snapshots: PetSnapshot[]) => cb(snapshots));
+  },
+  onStatusMsg: (cb: (text: string) => void): void => {
+    ipcRenderer.on("status-msg", (_event, text: string) => cb(text));
+  },
+  hideStatus: (): void => {
+    ipcRenderer.send("status-hide");
+  },
+  patAll: (): void => {
+    ipcRenderer.send("status-pat");
+  },
+  feedAll: (): void => {
+    ipcRenderer.send("status-feed");
+  },
+  cleanAllPoop: (): void => {
+    ipcRenderer.send("status-clean-poop");
   },
 });

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    overflow: hidden;
+    user-select: none;
+  }
+  #card {
+    margin: 0;
+    background: rgba(18, 18, 26, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 10px;
+    font-family: Consolas, monospace;
+    color: #eee;
+    padding: 0 0 8px 0;
+  }
+  #head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 6px 6px 10px;
+    /* Frameless window: the header is the drag handle. */
+    -webkit-app-region: drag;
+  }
+  #title {
+    font-size: 12px;
+    color: #9ad7ff;
+    letter-spacing: 0.5px;
+  }
+  #hide, #pat, #feed, #clean {
+    -webkit-app-region: no-drag;
+    border: 0;
+    background: transparent;
+    color: #888;
+    font-size: 13px;
+    line-height: 1;
+    padding: 4px 8px;
+    cursor: pointer;
+    border-radius: 6px;
+  }
+  #hide:hover {
+    color: #fff;
+    background: rgba(255, 122, 122, 0.35);
+  }
+  #pat:hover {
+    color: #fff;
+    background: rgba(255, 122, 150, 0.3);
+  }
+  #feed:hover {
+    color: #fff;
+    background: rgba(125, 216, 125, 0.25);
+  }
+  #clean:hover {
+    color: #fff;
+    background: rgba(201, 138, 75, 0.3);
+  }
+  #clean:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  #clean:disabled:hover {
+    color: #888;
+    background: transparent;
+  }
+  #pets {
+    padding: 0 10px;
+  }
+  .pet {
+    margin-bottom: 8px;
+  }
+  .pname {
+    font-size: 12px;
+    color: #ffd97a;
+    margin-bottom: 3px;
+  }
+  .flags {
+    color: #ff9a9a;
+  }
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 2px 0;
+  }
+  .blabel {
+    width: 44px;
+    font-size: 11px;
+    color: #aaa;
+  }
+  .btrack {
+    flex: 1;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .bfill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 300ms linear, background 300ms linear;
+  }
+  .bval {
+    width: 26px;
+    text-align: right;
+    font-size: 11px;
+    color: #ddd;
+  }
+  .counters {
+    font-size: 11px;
+    color: #8f8f9a;
+    margin-top: 2px;
+  }
+  #msg {
+    padding: 2px 10px 0 10px;
+    font-size: 11px;
+    color: #ffd97a;
+    min-height: 15px;
+  }
+</style>
+</head>
+<body>
+<div id="card">
+  <div id="head"><span id="title">ASCII Pets</span><span><button id="pat" title="Погладить всех">♥</button><button id="feed" title="Покормить всех">🍖</button><button id="clean" title="Убрать все какашки">💩</button><button id="hide" title="Скрыть окно">✕</button></span></div>
+  <div id="pets"></div>
+  <div id="msg"></div>
+</div>
+<script src="./status.js"></script>
+</body>
+</html>

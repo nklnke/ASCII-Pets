@@ -71,3 +71,11 @@ export function playEatSound(): void {
   tone(300, 80, "triangle", 0, 0.07);
   tone(250, 90, "triangle", 110, 0.07);
 }
+
+/** The deed: three descending plops. */
+export function playPoopSound(): void {
+  if (muted) return;
+  tone(180, 100, "sine", 0, 0.09);
+  tone(140, 110, "sine", 130, 0.09);
+  tone(100, 170, "sine", 270, 0.1);
+}

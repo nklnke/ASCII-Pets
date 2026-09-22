@@ -1,7 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  cleanPoop,
   createInitialStats,
+  rollPoop,
+  tickDirty,
   tickStats,
   petPet,
   feedPet,
@@ -57,5 +60,24 @@ describe("pet-stats", () => {
   it("sleepiness kicks in at zero energy", () => {
     const s = { ...createInitialStats(0), energy: 5 };
     assert.equal(isSleepy(s), true);
+  });
+
+  it("poop roll is deterministic from injected randomness", () => {
+    assert.equal(rollPoop(0), true);
+    assert.equal(rollPoop(0.99), false);
+  });
+
+  it("dirty pile rots mood over time", () => {
+    const s = createInitialStats(0);
+    const next = tickDirty(s, 0.5, 1000);
+    assert.ok(next.mood < s.mood);
+    assert.equal(next.hunger, s.hunger);
+    assert.equal(next.energy, s.energy);
+  });
+
+  it("cleaning up cheers the pet", () => {
+    const s = { ...createInitialStats(0), mood: 50 };
+    const next = cleanPoop(s, 1000);
+    assert.equal(next.mood, 55);
   });
 });
