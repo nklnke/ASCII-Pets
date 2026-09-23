@@ -40,6 +40,8 @@ let lastMsg = "";
 /** Latest snapshot pushed by the renderer (for the tray tooltip + sampler). */
 let lastStats: PetSnapshot[] = [];
 let sampler: NodeJS.Timeout | null = null;
+/** Slow guard that re-claims the always-on-top level. */
+let topGuard: NodeJS.Timeout | null = null;
 
 const PET_H = 200;
 const SAMPLE_BASE_MS = 2000;
@@ -184,8 +186,20 @@ function stripRect(): { x: number; y: number; width: number; height: number } {
 }
 
 function applyAlwaysOnTop(): void {
-  if (win && !win.isDestroyed()) {
-    win.setAlwaysOnTop(onTop, "screen-saver");
+  for (const w of [win, statusWin, settingsWin]) {
+    if (!w || w.isDestroyed()) continue;
+    try {
+      if (onTop) {
+        // Re-assert every time: any other topmost window (or a sleep /
+        // geometry change) can push us down until we claim the level again.
+        w.setAlwaysOnTop(true, "screen-saver");
+        w.moveTop();
+      } else {
+        w.setAlwaysOnTop(false);
+      }
+    } catch {
+      // Window going away — nothing to level.
+    }
   }
 }
 
@@ -614,6 +628,7 @@ function createWindow(): void {
 
   // screen-saver level renders above the taskbar on Windows.
   applyAlwaysOnTop();
+  win.setVisibleOnAllWorkspaces(true);
   win.setMenu(null);
 
   // Click-through everywhere; the renderer re-enables mouse events
@@ -639,6 +654,7 @@ function createWindow(): void {
 function placeWindow(startled: boolean): void {
   if (!win || win.isDestroyed()) return;
   win.setBounds(stripRect());
+  applyAlwaysOnTop();
   if (startled) win.webContents.send("pet-startle");
 }
 
@@ -688,6 +704,7 @@ function createStatusWindow(): void {
     },
   });
   statusWin.setAlwaysOnTop(true, "screen-saver");
+  statusWin.setVisibleOnAllWorkspaces(true);
   statusWin.setMenu(null);
   void statusWin.loadFile(path.join(__dirname, "renderer", "status.html"));
   statusWin.webContents.on("did-finish-load", () => {
@@ -768,6 +785,7 @@ function createSettingsWindow(): void {
     },
   });
   settingsWin.setAlwaysOnTop(true, "screen-saver");
+  settingsWin.setVisibleOnAllWorkspaces(true);
   settingsWin.setMenu(null);
   void settingsWin.loadFile(path.join(__dirname, "renderer", "settings.html"));
   settingsWin.webContents.on("did-finish-load", () => {
@@ -813,7 +831,18 @@ function openSettings(): void {
   }
 }
 
+/** Second copy launched: quit it, poke the first one (visible feedback). */
+const singleInstance = app.requestSingleInstanceLock();
+if (!singleInstance) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    openSettings();
+  });
+}
+
 void app.whenReady().then(() => {
+  if (!singleInstance) return;
   // Required for Windows toast notifications (dev + portable need it explicit).
   try {
     app.setAppUserModelId("com.ascii.pets");
@@ -901,6 +930,15 @@ void app.whenReady().then(() => {
   screen.on("display-added", onDisplayChanged);
   screen.on("display-removed", onDisplayChanged);
 
+  // Another topmost window can claim the level after us (overlays, players,
+  // task manager): take it back on focus loss and on a slow guard timer.
+  app.on("browser-window-blur", () => {
+    if (onTop) applyAlwaysOnTop();
+  });
+  topGuard = setInterval(() => {
+    if (onTop) applyAlwaysOnTop();
+  }, 30_000);
+
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -912,6 +950,8 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   stopSampler();
+  if (topGuard) clearInterval(topGuard);
+  topGuard = null;
   if (statusWin && !statusWin.isDestroyed()) statusWin.destroy();
   statusWin = null;
   if (settingsWin && !settingsWin.isDestroyed()) settingsWin.destroy();
