@@ -690,6 +690,19 @@ function setShowStatus(v: boolean): void {
   }
 }
 
+/** Fit the status window to the reported card height (1–3 pets). */
+function fitStatusWindow(cardH: number): void {
+  if (!statusWin || statusWin.isDestroyed()) return;
+  if (typeof cardH !== "number" || !isFinite(cardH)) return;
+  const wa = selectedDisplay().workArea;
+  const h = Math.min(Math.max(Math.round(cardH), 120), Math.max(200, wa.height - 40));
+  statusWin.setContentSize(STATUS_W, h);
+  // The window grows downward — pull it up if it spills off-screen.
+  const [x, y] = statusWin.getPosition();
+  const maxBottom = wa.y + wa.height - 8;
+  if (y + h > maxBottom) statusWin.setPosition(x, Math.max(wa.y, maxBottom - h));
+}
+
 const SETTINGS_W = 360;
 const SETTINGS_H = 600;
 
@@ -813,6 +826,9 @@ void app.whenReady().then(() => {
     if (statusWin && !statusWin.isDestroyed()) statusWin.webContents.send("status-msg", text);
   });
   ipcMain.on("status-hide", () => setShowStatus(false));
+  ipcMain.on("status-resize", (_event, height: unknown) => {
+    if (typeof height === "number") fitStatusWindow(height);
+  });
   // Status window action buttons: same broadcast as the tray menu (whole pack).
   ipcMain.on("status-pat", () => sendToRenderer("pet-action"));
   ipcMain.on("status-feed", () => sendToRenderer("pet-feed"));

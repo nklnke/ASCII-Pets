@@ -102,6 +102,9 @@ contextBridge.exposeInMainWorld("petAPI", {
   reportSettingsSize: (height: number): void => {
     ipcRenderer.send("settings-resize", height);
   },
+  reportStatusSize: (height: number): void => {
+    ipcRenderer.send("status-resize", height);
+  },
   getDisplays: (): Promise<DisplayOption[]> => {
     return ipcRenderer.invoke("get-displays");
   },
