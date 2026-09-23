@@ -42,11 +42,14 @@ let lastStats: PetSnapshot[] = [];
 let sampler: NodeJS.Timeout | null = null;
 
 const PET_H = 200;
-const SAMPLE_EVERY_MS = 1000;
-/** Screen capture size for the sampler (once/sec; bigger = more unique px per cell). */
-const THUMB_W = 960;
-const THUMB_H = 540;
-const SAMPLE_STEP_PX = 2;
+const SAMPLE_BASE_MS = 2000;
+const SAMPLE_MAX_MS = 5000;
+/** A sample slower than this backs the interval off (HDR/144Hz/HiDPI machines). */
+const SAMPLE_SLOW_MS = 300;
+/** Screen capture size for the sampler (smaller = cheaper JS medians). */
+const THUMB_W = 640;
+const THUMB_H = 360;
+const SAMPLE_STEP_PX = 4;
 /** Upper bound for a single frame grid (frames are ~11x5). */
 const MAX_CELLS = 400;
 
@@ -200,14 +203,39 @@ function setColorMode(on: boolean): void {
   if (win && !win.isDestroyed()) win.webContents.send("set-color-mode", colorMode);
 }
 
+/** Current sampler interval (auto-degraded, reset when fast again). */
+let sampleEveryMs = SAMPLE_BASE_MS;
+/** Layout signature of the last sampled frame + tick counter. */
+let lastSampleKey = "";
+let sampleTick = 0;
+
 function startSampler(): void {
   stopSampler();
-  sampler = setInterval(() => void sampleBackdrop(), SAMPLE_EVERY_MS);
+  void sampleLoop();
 }
 
 function stopSampler(): void {
-  if (sampler) clearInterval(sampler);
+  if (sampler) clearTimeout(sampler);
   sampler = null;
+}
+
+/** Self-scheduling loop: measures every sample and backs off on slow frames
+ *  (multi-monitor/HDR/high-Hz captures can cost hundreds of ms each). */
+async function sampleLoop(): Promise<void> {
+  if (!colorMode) {
+    sampler = null;
+    return;
+  }
+  const t0 = Date.now();
+  await sampleBackdrop();
+  const dt = Date.now() - t0;
+  if (dt > SAMPLE_SLOW_MS) {
+    sampleEveryMs = Math.min(SAMPLE_MAX_MS, sampleEveryMs * 2);
+    console.warn(`[sampler] slow frame: ${dt}ms, backing off to ${sampleEveryMs}ms`);
+  } else if (dt < 100) {
+    sampleEveryMs = SAMPLE_BASE_MS;
+  }
+  sampler = setTimeout(() => void sampleLoop(), sampleEveryMs);
 }
 
 /**
@@ -217,7 +245,14 @@ function stopSampler(): void {
  * character cell — accuracy over smoothness, no neighbor blending.
  */
 async function sampleBackdrop(): Promise<void> {
-  if (!colorMode || !win || win.isDestroyed() || lastStats.length === 0) return;
+  if (!colorMode || paused || !win || win.isDestroyed() || lastStats.length === 0) return;
+  // Static frame: pets didn't move since the last sample — skip the capture
+  // (the expensive part on multi-monitor/HDR/high-Hz setups). Every 5th tick
+  // still resamples so a changed backdrop behind idle pets catches up.
+  sampleTick += 1;
+  const key = lastStats.map((s) => [s.ox, s.oy, s.cols, s.rows, s.charW, s.charH].join(",")).join("|");
+  if (key.length > 0 && key === lastSampleKey && sampleTick % 5 !== 0) return;
+  lastSampleKey = key;
   try {
     const sources = await desktopCapturer.getSources({
       types: ["screen"],
