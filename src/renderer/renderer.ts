@@ -554,7 +554,7 @@ class Pet {
   }
 
   /** Click on a pile: fade it out, cheer the pet up a little. */
-  // (CSS transition is 300ms — the timer below has a small margin so the
+  // (CSS transition is 150ms — the timer below has a small margin so the
   // node never pops early.)
   // Fade-out: stats/sound/message fire on click, the node fades 300ms
   // and is removed by the timer. destroy() removes nodes instantly; the
@@ -578,7 +578,7 @@ class Pet {
     window.setTimeout(() => {
       wrap.remove();
       renderStats();
-    }, 320);
+    }, 170);
   }
 
   tickNeeds(elapsedMin: number): void {
