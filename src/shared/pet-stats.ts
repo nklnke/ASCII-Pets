@@ -114,3 +114,28 @@ export function cleanPoop(s: PetStats, now: number): PetStats {
     updatedAt: now,
   };
 }
+
+// Petting-spam handling: too many pats in a short window annoys the pet.
+// Timestamps live in the renderer; the window/limit math stays pure here.
+
+/** Pats within this window count toward the spam limit. */
+export const PET_SPAM_WINDOW_MS = 10_000;
+/** Pats in the window that trigger the annoyed reaction. */
+export const PET_SPAM_LIMIT = 5;
+/** Mood points lost when overpetted. */
+export const ANNOY_MOOD_HIT = 10;
+
+/** True when the recent pat timestamps hit the spam limit. */
+export function isPettingSpam(petAt: number[], now: number): boolean {
+  return petAt.filter((t) => now - t < PET_SPAM_WINDOW_MS).length >= PET_SPAM_LIMIT;
+}
+
+/** Overpetted: still counts the interaction, but the mood stings. */
+export function annoyPet(s: PetStats, now: number): PetStats {
+  return {
+    ...s,
+    pets: s.pets + 1,
+    mood: clamp(s.mood - ANNOY_MOOD_HIT),
+    updatedAt: now,
+  };
+}

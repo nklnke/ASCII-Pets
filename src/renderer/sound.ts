@@ -208,6 +208,44 @@ export function playDrop(): void {
   tone(110, 100, "sine", 60, 0.09);
 }
 
+/** Fling boing: fast rising sweep + landing thud. */
+export function playBoing(): void {
+  if (muted) return;
+  sweep(150, 650, 220, "sine", 0, 0.1);
+  tone(120, 120, "sine", 230, 0.1);
+}
+
+/** Annoyed reaction to overpetting: hiss / growl / grumble per skin. */
+export function playAnnoyed(skinId: string): void {
+  if (muted) return;
+  if (skinId === "dog") {
+    tone(95, 300, "square", 0, 0.09);
+    tone(75, 300, "square", 50, 0.08);
+  } else if (skinId === "frog") {
+    tone(70, 300, "sawtooth", 0, 0.1);
+    tone(55, 250, "sawtooth", 120, 0.09);
+  } else {
+    // *фшш*: cat hiss — noisy high slide down
+    sweep(2500, 1200, 250, "sawtooth", 0, 0.045);
+    tone(1800, 150, "square", 30, 0.04);
+  }
+}
+
+/** Sleepy wake-up: long yawn + the pet's own voice. */
+export function playWake(skinId: string): void {
+  if (muted) return;
+  sweep(150, 420, 400, "sine", 0, 0.1);
+  voice(skinId, 420);
+}
+
+/** Curious "hmm?": two soft high blips. Throttled (~2.5s). */
+export function playCurious(): void {
+  if (muted) return;
+  if (!gate("curious", 2500)) return;
+  tone(700, 60, "triangle", 0, 0.06);
+  tone(950, 70, "triangle", 80, 0.06);
+}
+
 /** Pair-interaction jingle (the voice itself is played by the caller). */
 export function playSocial(kind: string, skinId: string): void {
   if (muted) return;

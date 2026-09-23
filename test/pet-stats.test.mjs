@@ -1,8 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  ANNOY_MOOD_HIT,
+  PET_SPAM_LIMIT,
+  PET_SPAM_WINDOW_MS,
+  annoyPet,
   cleanPoop,
   createInitialStats,
+  isPettingSpam,
   rollPoop,
   tickDirty,
   tickStats,
@@ -79,5 +84,24 @@ describe("pet-stats", () => {
     const s = { ...createInitialStats(0), mood: 50 };
     const next = cleanPoop(s, 1000);
     assert.equal(next.mood, 55);
+  });
+
+  it("petting spam trips at the limit inside the window", () => {
+    const now = 60_000;
+    const spammy = Array.from({ length: PET_SPAM_LIMIT }, (_, i) => now - i * 1000);
+    assert.equal(isPettingSpam(spammy, now), true);
+    assert.equal(isPettingSpam(spammy.slice(0, PET_SPAM_LIMIT - 1), now), false);
+    const stale = Array.from({ length: PET_SPAM_LIMIT }, () => now - PET_SPAM_WINDOW_MS - 1);
+    assert.equal(isPettingSpam(stale, now), false);
+  });
+
+  it("overpetting counts the interaction but stings the mood", () => {
+    const s = createInitialStats(0);
+    const next = annoyPet(s, 1000);
+    assert.equal(next.pets, s.pets + 1);
+    assert.equal(next.mood, s.mood - ANNOY_MOOD_HIT);
+    assert.equal(next.hunger, s.hunger);
+    assert.equal(next.energy, s.energy);
+    assert.equal(next.updatedAt, 1000);
   });
 });

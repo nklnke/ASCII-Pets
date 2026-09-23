@@ -2,9 +2,12 @@ import { POOP_STINK, SkinFrames, framesFor, poopFor } from "./ascii";
 import {
   PetStats,
   TIRED_AT,
+  PET_SPAM_WINDOW_MS,
+  annoyPet,
   cleanPoop,
   feedPet,
   isHungry,
+  isPettingSpam,
   isSleepy,
   petPet,
   rollPoop,
@@ -23,7 +26,7 @@ import {
   temperamentForSlot,
 } from "../shared/temperament";
 import { clearPoop, loadPoop, loadStats, savePoop, saveStats, startAutosave } from "./pet-store";
-import { playClean, playDrop, playEatSound, playGreet, playHungry, playJump, playPetSound, playPoopSound, playSniff, playSnore, playSocial, playStartle, playStep, setMuted } from "./sound";
+import { playAnnoyed, playBoing, playClean, playCurious, playDrop, playEatSound, playGreet, playHungry, playJump, playPetSound, playPoopSound, playSniff, playSnore, playSocial, playStartle, playStep, playWake, setMuted } from "./sound";
 import "./pet-api";
 
 const stageEl = document.getElementById("stage") as HTMLDivElement;
@@ -50,12 +53,27 @@ const STRIDE_PX: Record<Exclude<Gait, "sniff">, number> = { amble: 14, walk: 10,
 const SPEED_SMOOTH = 6;
 /** Single click waits this long to make sure it's not a double-click (feed). */
 const CLICK_DELAY_MS = 260;
+/** Fling: release speed above this (px/s) slides the pet with momentum. */
+const FLING_MIN_V = 600;
+/** Fling launch speed clamp (px/s) + slide length. */
+const FLING_MAX_V = 1600;
+const FLING_MS = 450;
+/** Energy points a fling costs. */
+const FLING_ENERGY_COST = 5;
+/** Wake-up click keeps a sleepy pet awake this long. */
+const WAKE_MS = 45_000;
+/** After the annoyed reaction, pats give only a little mood for this long. */
+const ANNOY_COOLDOWN_MS = 12_000;
+/** "Come here" message throttle (the facing itself always applies). */
+const CALL_MSG_MS = 4000;
 
 let paused = false;
 /** Pack-wide drawing style (ASCII1 classic / ASCII2 blocks); owned by main. */
 let style = DEFAULT_STYLE;
 let dragPet: Pet | null = null;
 let grabOffset = 0;
+/** Recent drag points for the release-velocity (fling) estimate. */
+let dragTrail: Array<{ x: number; t: number }> = [];
 
 function showMsg(text: string): void {
   // The strip toast is gone (status lives in the floating window) —
@@ -141,6 +159,13 @@ class Pet {
   blinkUntil = 0;
   stats: PetStats;
   clickTimer = 0;
+  /** Recent pat timestamps (spam window) + annoy cooldown + forced wake. */
+  petTimes: number[] = [];
+  annoyUntil = 0;
+  forceAwakeUntil = 0;
+  /** Fling state: slide with decaying momentum until this timestamp. */
+  flingUntil = 0;
+  flingV = 0;
   // Poop pile (one max per pet): a floor-anchored wrap with the pile
   // on the ground line and animated stink waves above it.
   poopEl: HTMLDivElement | null = null;
@@ -216,7 +241,7 @@ class Pet {
   }
 
   sleeping(): boolean {
-    return isSleepy(this.stats);
+    return isSleepy(this.stats) && Date.now() >= this.forceAwakeUntil;
   }
 
   sniffing(now: number): boolean {
@@ -385,7 +410,39 @@ class Pet {
   }
 
   doPet(): void {
-    this.stats = petPet(this.stats, Date.now());
+    const now = Date.now();
+    // Wake-up click: a sleepy pet yawns awake for a while (not a pat, no spam).
+    if (this.sleeping()) {
+      this.forceAwakeUntil = now + WAKE_MS;
+      this.startJump(0.4);
+      this.setFrame(this.frames().happy[0]);
+      showMsg(`${this.label()}: *зевок* …пять минут…`);
+      playWake(this.skinId);
+      renderStats();
+      return;
+    }
+    // Overpetted: turn away, hiss, mood stings.
+    this.petTimes = this.petTimes.filter((t) => now - t < PET_SPAM_WINDOW_MS);
+    if (isPettingSpam(this.petTimes, now)) {
+      this.petTimes = [];
+      this.annoyUntil = now + ANNOY_COOLDOWN_MS;
+      this.stats = annoyPet(this.stats, now);
+      saveStats(this.slot, this.stats);
+      this.dir = this.dir === 1 ? -1 : 1;
+      this.slowUntil = now + TURN_SLOW_MS;
+      this.startJump(0.5);
+      showMsg(`${this.label()}: хватит!`);
+      playAnnoyed(this.skinId);
+      renderStats();
+      return;
+    }
+    this.petTimes.push(now);
+    let st = petPet(this.stats, now);
+    // Freshly annoyed: pats barely help for a while.
+    if (now < this.annoyUntil) {
+      st = { ...st, mood: Math.max(0, Math.min(100, this.stats.mood + 3)) };
+    }
+    this.stats = st;
     saveStats(this.slot, this.stats);
     this.happyUntil = Date.now() + HAPPY_MS;
     this.startJump(0.6);
@@ -507,6 +564,23 @@ class Pet {
     this.decideUntil = now + roll.durationMs;
   }
 
+  /** Fling slide: decaying momentum after a throw (legs keep cycling). */
+  flingStep(dt: number, now: number): void {
+    const p = 1 - (this.flingUntil - now) / FLING_MS;
+    const speed = this.flingV * Math.max(0, 1 - p);
+    const dx = this.dir * speed * dt;
+    this.bobPhase += (Math.abs(dx) / STRIDE_PX.walk) * Math.PI;
+    this.strideAcc += Math.abs(dx);
+    this.x = this.clampX(this.x + dx);
+    if (this.x <= EDGE_MARGIN || this.x >= window.innerWidth - this.width() - EDGE_MARGIN) {
+      this.dir = this.x <= EDGE_MARGIN ? 1 : -1;
+      this.slowUntil = now + TURN_SLOW_MS;
+      this.flingUntil = 0;
+    }
+    this.renderPosition(now);
+    maybePushPos(now);
+  }
+
   /** Hopper locomotion: sit out the pause, then leap to the next spot. */
   hopStep(now: number): void {
     this.think(now);
@@ -543,6 +617,10 @@ class Pet {
     if (dragPet === this) return;
     if (this.sleeping() && !this.jumping(now)) {
       this.speedCur = 0;
+      return;
+    }
+    if (now < this.flingUntil) {
+      this.flingStep(dt, now);
       return;
     }
     if (this.hopper()) {
@@ -706,6 +784,8 @@ class Pet {
       dragPet = this;
       this.speedCur = 0;
       this.strideAcc = 0;
+      this.flingUntil = 0;
+      dragTrail = [{ x: e.clientX, t: Date.now() }];
       grabOffset = e.clientX - this.el.getBoundingClientRect().left;
     });
 
@@ -1084,14 +1164,70 @@ window.addEventListener("mousemove", (e: MouseEvent) => {
   if (!dragPet) return;
   dragPet.x = dragPet.clampX(e.clientX - grabOffset);
   dragPet.renderPosition(Date.now());
+  dragTrail.push({ x: e.clientX, t: Date.now() });
+  while (dragTrail.length > 6) dragTrail.shift();
 });
 window.addEventListener("mouseup", () => {
   if (!dragPet) return;
-  dragPet.speedCur = 0;
-  dragPet.strideAcc = 0;
+  const thrown = dragPet;
+  // Release velocity over the last ~150ms decides throw vs drop.
+  const now = Date.now();
+  const recent = dragTrail.filter((p) => now - p.t < 150);
+  let v = 0;
+  if (recent.length >= 2) {
+    const first = recent[0];
+    const last = recent[recent.length - 1];
+    const dt = Math.max(1, last.t - first.t);
+    v = ((last.x - first.x) / dt) * 1000;
+  }
+  dragTrail = [];
+  thrown.speedCur = 0;
+  thrown.strideAcc = 0;
   dragPet = null;
-  playDrop();
+  if (Math.abs(v) >= FLING_MIN_V && !thrown.sleeping()) {
+    const speed = Math.min(Math.abs(v), FLING_MAX_V);
+    thrown.dir = v > 0 ? 1 : -1;
+    thrown.stats = { ...thrown.stats, energy: Math.max(0, thrown.stats.energy - FLING_ENERGY_COST), updatedAt: now };
+    saveStats(thrown.slot, thrown.stats);
+    if (thrown.hopper()) {
+      // Hoppers can't slide: one big leap in the throw direction.
+      thrown.hopFromX = thrown.x;
+      thrown.hopToX = thrown.clampX(thrown.x + thrown.dir * Math.min(320, speed * 0.22));
+      thrown.startJump(1.2, false);
+      thrown.nextHopAt = now + JUMP_MS + 300;
+    } else {
+      thrown.flingV = speed;
+      thrown.flingUntil = now + FLING_MS;
+      thrown.startJump(0.9);
+    }
+    showMsg(`${thrown.label()}: ууух!`);
+    playBoing();
+    renderStats();
+  } else {
+    playDrop();
+  }
   window.petAPI?.setClickable(false);
+});
+
+// Double-click on empty space: the pack turns toward the call.
+let lastCallMsg = 0;
+window.addEventListener("dblclick", (e: MouseEvent) => {
+  if ((e.target as HTMLElement | null)?.closest?.(".pet, .poop-wrap")) return;
+  const now = Date.now();
+  let called = false;
+  for (const p of pets) {
+    if (p.sleeping()) continue;
+    p.dir = e.clientX < p.x + p.width() / 2 ? -1 : 1;
+    p.slowUntil = 0;
+    called = true;
+  }
+  if (called) {
+    playCurious();
+    if (now - lastCallMsg > CALL_MSG_MS) {
+      lastCallMsg = now;
+      showMsg("…навостряет уши!");
+    }
+  }
 });
 
 // A click near (but not on) a pet startles it — it hops away.
