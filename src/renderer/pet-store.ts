@@ -64,26 +64,31 @@ export function saveStats(slot: number, s: PetStats): void {
   }
 }
 
-// Poop pile persistence: just the horizontal position per slot (one pile max).
+// Poop pile persistence: horizontal positions per slot (up to two piles).
 // A stored pile survives restarts — the mess waits for you.
+// Old single-number saves migrate forward (read as one pile).
 function poopKey(slot: number): string {
   return `ascii-pets:poop:v1:slot${slot}`;
 }
 
-export function loadPoop(slot: number): number | null {
+export function loadPoop(slot: number): number[] {
   try {
     const raw = localStorage.getItem(poopKey(slot));
-    if (!raw) return null;
-    const x = JSON.parse(raw) as number;
-    return typeof x === "number" && isFinite(x) && x >= 0 ? x : null;
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    const xs = Array.isArray(parsed) ? parsed : [parsed];
+    return xs.filter((x): x is number => typeof x === "number" && Number.isFinite(x) && x >= 0);
   } catch {
-    return null;
+    return [];
   }
 }
 
-export function savePoop(slot: number, x: number): void {
+export function savePoop(slot: number, xs: number[]): void {
   try {
-    localStorage.setItem(poopKey(slot), JSON.stringify(x));
+    localStorage.setItem(
+      poopKey(slot),
+      JSON.stringify(xs.filter((x) => typeof x === "number" && Number.isFinite(x) && x >= 0)),
+    );
   } catch {
     // Same as stats — the pile just won't survive a restart. Fine.
   }

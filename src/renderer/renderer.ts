@@ -66,6 +66,16 @@ const WAKE_MS = 45_000;
 const ANNOY_COOLDOWN_MS = 12_000;
 /** "Come here" message throttle (the facing itself always applies). */
 const CALL_MSG_MS = 4000;
+/** Poop piles per pet + horizontal gap so two piles never fully overlap. */
+const MAX_POOPS_PER_PET = 2;
+const POOP_GAP = 70;
+
+/** One floor-anchored poop pile (DOM node + stink waves + position). */
+interface PoopPile {
+  wrap: HTMLDivElement;
+  stink: HTMLPreElement;
+  x: number;
+}
 
 let paused = false;
 /** Pack-wide drawing style (ASCII1 classic / ASCII2 blocks); owned by main. */
@@ -166,11 +176,9 @@ class Pet {
   /** Fling state: slide with decaying momentum until this timestamp. */
   flingUntil = 0;
   flingV = 0;
-  // Poop pile (one max per pet): a floor-anchored wrap with the pile
+  // Poop piles (two max per pet): floor-anchored wraps with the pile
   // on the ground line and animated stink waves above it.
-  poopEl: HTMLDivElement | null = null;
-  stinkEl: HTMLPreElement | null = null;
-  poopX = 0;
+  piles: PoopPile[] = [];
   // Brain & body.
   temp: TemperamentParams;
   gait: Gait = "walk";
@@ -223,9 +231,8 @@ class Pet {
     stageEl.appendChild(this.el);
     this.wireEvents();
     this.renderPosition(Date.now());
-    // The mess waits for you: restore an uncleaned pile after restart.
-    const storedPoop = loadPoop(slot);
-    if (storedPoop !== null) this.dropPoop(storedPoop, true);
+    // The mess waits for you: restore uncleaned piles after restart.
+    for (const x of loadPoop(slot)) this.dropPoop(x, true);
   }
 
   frames(): SkinFrames {
@@ -461,21 +468,25 @@ class Pet {
     showMsg(`${this.label()}: *nom-nom* (покормлен ${this.stats.meals})`);
     playEatSound();
     // Nature calls: with POOP_CHANCE the meal leaves a pile behind.
-    if (!this.poopEl && rollPoop(Math.random())) {
+    if (this.piles.length < MAX_POOPS_PER_PET && rollPoop(Math.random())) {
       this.dropPoop(this.clampX(this.x + 60));
       showMsg(`${this.label()}: ой… кликни по кучке, чтобы убрать`);
     }
     renderStats();
   }
 
-  /** Leave a poop pile at x (style pile art, one pile per pet max). */
+  /** Leave a poop pile at x (style pile art, two piles per pet max). */
   dropPoop(x: number, quiet = false): void {
-    if (this.poopEl) return;
-    this.poopX = x;
+    if (this.piles.length >= MAX_POOPS_PER_PET) return;
+    // Shift the newcomer so two piles never sit exactly on top of each other.
+    let px = this.clampX(x);
+    for (const pile of this.piles) {
+      if (Math.abs(pile.x - px) < POOP_GAP) px = this.clampX(px + POOP_GAP);
+    }
     const wrap = document.createElement("div");
     wrap.className = "poop-wrap";
     wrap.classList.toggle("flat", style === "ascii3");
-    wrap.style.transform = `translateX(${Math.round(x)}px)`;
+    wrap.style.transform = `translateX(${Math.round(px)}px)`;
     wrap.title = "Клик — убрать";
     const stink = document.createElement("pre");
     stink.className = "stink";
@@ -492,35 +503,41 @@ class Pet {
     wrap.addEventListener("mouseleave", () => {
       if (dragPet !== this) window.petAPI?.setClickable(false);
     });
-    wrap.addEventListener("click", () => this.cleanPoopEl());
+    wrap.addEventListener("click", () => this.cleanPoopEl(wrap));
     wrap.addEventListener("contextmenu", (e: MouseEvent) => {
       e.preventDefault();
       window.petAPI?.showMenu();
     });
     stageEl.appendChild(wrap);
-    this.poopEl = wrap;
-    this.stinkEl = stink;
+    this.piles.push({ wrap, stink, x: px });
     // Gentle fade-in (same 300ms curve as the fade-out below).
     wrap.classList.add("poop-enter");
     void wrap.offsetWidth;
     wrap.classList.remove("poop-enter");
-    savePoop(this.slot, x);
+    savePoop(
+      this.slot,
+      this.piles.map((p) => p.x),
+    );
     if (!quiet) {
       playPoopSound();
       renderStats();
     }
   }
 
-  /** Click on the pile: fade it out, cheer the pet up a little. */
+  /** Click on a pile: fade it out, cheer the pet up a little. */
   // (CSS transition is 300ms — the timer below has a small margin so the
   // node never pops early.)
   // Fade-out: stats/sound/message fire on click, the node fades 300ms
-  // and is removed by the timer. destroy() removes it instantly; the timer
-  // then only refreshes stats (guarded by identity check).
-  cleanPoopEl(): void {
-    const wrap = this.poopEl;
-    if (!wrap || wrap.classList.contains("poop-leaving")) return;
-    clearPoop(this.slot);
+  // and is removed by the timer. destroy() removes nodes instantly; the
+  // timer then only refreshes stats.
+  // No argument = the oldest pile (status/tray "clean all" loops these).
+  cleanPoopEl(target: HTMLDivElement | null = null): void {
+    const pile = target ? this.piles.find((p) => p.wrap === target) : this.piles[0];
+    if (!pile || pile.wrap.classList.contains("poop-leaving")) return;
+    const { wrap } = pile;
+    this.piles = this.piles.filter((p) => p !== pile);
+    if (this.piles.length === 0) clearPoop(this.slot);
+    else savePoop(this.slot, this.piles.map((p) => p.x));
     this.stats = cleanPoop(this.stats, Date.now());
     saveStats(this.slot, this.stats);
     playClean();
@@ -531,18 +548,16 @@ class Pet {
     renderStats();
     window.setTimeout(() => {
       wrap.remove();
-      if (this.poopEl === wrap) {
-        this.poopEl = null;
-        this.stinkEl = null;
-      }
       renderStats();
     }, 320);
   }
 
   tickNeeds(elapsedMin: number): void {
     this.stats = tickStats(this.stats, elapsedMin, paused, Date.now());
-    // Uncleaned pile rots the mood on top of the normal drift.
-    if (this.poopEl) this.stats = tickDirty(this.stats, elapsedMin, Date.now());
+    // Each uncleaned pile rots the mood on top of the normal drift.
+    for (let i = 0; i < this.piles.length; i++) {
+      this.stats = tickDirty(this.stats, elapsedMin, Date.now());
+    }
     saveStats(this.slot, this.stats);
   }
 
@@ -742,18 +757,18 @@ class Pet {
     this.setFrame(frames[this.frame]);
   }
 
-  /** Stink waves over the pile: a slow lazy cycle (~400ms a frame). */
+  /** Stink waves over the piles: a slow lazy cycle (~400ms a frame). */
   animateStink(tick: number): void {
-    if (!this.stinkEl) return;
-    this.stinkEl.textContent = POOP_STINK[Math.floor(tick / 4 + this.slot) % POOP_STINK.length];
+    this.piles.forEach((pile, i) => {
+      pile.stink.textContent = POOP_STINK[Math.floor(tick / 4 + this.slot + i) % POOP_STINK.length];
+    });
   }
 
   destroy(): void {
     window.clearTimeout(this.clickTimer);
     saveStats(this.slot, this.stats);
-    this.poopEl?.remove();
-    this.poopEl = null;
-    this.stinkEl = null;
+    for (const pile of this.piles) pile.wrap.remove();
+    this.piles = [];
     this.el.remove();
   }
 
@@ -811,7 +826,7 @@ function renderStats(): void {
         hunger: p.stats.hunger,
         mood: p.stats.mood,
         energy: p.stats.energy,
-        dirty: !!p.poopEl,
+        dirty: !!p.piles.length,
         pets: p.stats.pets,
         meals: p.stats.meals,
         ox: Math.round(p.x) + cell.padL,
@@ -1290,7 +1305,9 @@ window.petAPI?.onPetFeed(() => {
   for (const p of pets) p.doFeed();
 });
 window.petAPI?.onPetCleanPoop(() => {
-  for (const p of pets) p.cleanPoopEl();
+  for (const p of pets) {
+    while (p.piles.length > 0) p.cleanPoopEl();
+  }
 });
 window.petAPI?.onPetGreet(() => {
   for (const p of pets) p.greet();
@@ -1313,9 +1330,11 @@ window.petAPI?.onSetStyle((next) => {
   }
   // Piles already on the ground switch pile art immediately (stink stays).
   for (const p of pets) {
-    p.poopEl?.classList.toggle("flat", style === "ascii3");
-    const pileEl = p.poopEl?.querySelector(".poop");
-    if (pileEl) pileEl.textContent = poopFor(style);
+    for (const pile of p.piles) {
+      pile.wrap.classList.toggle("flat", style === "ascii3");
+      const pileEl = pile.wrap.querySelector(".poop");
+      if (pileEl) pileEl.textContent = poopFor(style);
+    }
   }
   renderStats();
 });
