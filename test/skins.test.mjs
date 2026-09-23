@@ -21,6 +21,7 @@ describe("skins", () => {
   it("normalizes packs from settings/menu/IPC", () => {
     assert.deepEqual(normalizePack(["dog"]), ["dog"]);
     assert.deepEqual(normalizePack([]), ["cat"]);
+    assert.deepEqual(normalizePack(["cat", "dog", "frog"]), ["cat", "dog", "frog"]);
     assert.deepEqual(normalizePack(["cat", "dog", "cat"]).length, MAX_PETS);
     assert.deepEqual(normalizePack(["fish", "dog"]), ["dog"]);
     assert.deepEqual(normalizePack(undefined), ["cat"]);

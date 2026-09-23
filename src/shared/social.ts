@@ -4,7 +4,10 @@
 
 import type { PetStats } from "./pet-stats";
 
-export type SocialKind = "play" | "chase" | "squabble" | "sniff" | "dance" | "race";
+export type SocialKind = "play" | "chase" | "squabble" | "sniff" | "dance" | "race" | "huddle" | "parade";
+
+/** Trio-only kinds (the whole pack at once). */
+export type TrioKind = "huddle" | "parade";
 
 /** Pixel distance (by pet x) that counts as "met". */
 export const SOCIAL_RADIUS = 140;
@@ -38,6 +41,21 @@ export function shouldSocialize(distPx: number, sinceLastMs: number, r: number):
   return pickSocial(r);
 }
 
+/** Deterministic trio pick: pass Math.random() from the caller (testable). */
+export function pickTrioSocial(r: number): TrioKind {
+  return r < 0.6 ? "huddle" : "parade";
+}
+
+/**
+ * Pure trio gate: the whole cluster fits in the radius + cooldown elapsed.
+ * maxDistPx = largest pairwise distance; sinceLastMs < 0 counts as elapsed.
+ */
+export function shouldSocializeTrio(maxDistPx: number, sinceLastMs: number, r: number): TrioKind | null {
+  if (!(maxDistPx >= 0) || maxDistPx > SOCIAL_RADIUS) return null;
+  if (!(sinceLastMs < 0 || sinceLastMs >= SOCIAL_COOLDOWN_MS)) return null;
+  return pickTrioSocial(r);
+}
+
 /** Mood delta for one social event (squabble stings a little). */
 export function socialMoodDelta(kind: SocialKind): number {
   switch (kind) {
@@ -52,6 +70,10 @@ export function socialMoodDelta(kind: SocialKind): number {
     case "dance":
       return 8;
     case "race":
+      return 5;
+    case "huddle":
+      return 7;
+    case "parade":
       return 5;
   }
 }
@@ -71,6 +93,10 @@ export function socialEnergyDelta(kind: SocialKind): number {
       return -5;
     case "race":
       return -12;
+    case "huddle":
+      return -3;
+    case "parade":
+      return -10;
   }
 }
 

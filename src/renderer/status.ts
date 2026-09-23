@@ -81,7 +81,28 @@ window.petAPI?.onStatusUpdate((snapshots) => {
   render(snapshots);
   const cleanBtn = document.getElementById("clean") as HTMLButtonElement | null;
   if (cleanBtn) cleanBtn.disabled = !snapshots.some((s) => s.dirty);
+  reportSize();
 });
+
+/** Tell main the real card height so it can fit 1–3 pets (only on change). */
+let lastStatusH = 0;
+function reportSize(): void {
+  const card = document.getElementById("card");
+  if (!card) return;
+  const h = card.offsetHeight;
+  if (h > 0 && h !== lastStatusH) {
+    lastStatusH = h;
+    window.petAPI?.reportStatusSize(h);
+  }
+}
+try {
+  void document.fonts?.ready.then(() => {
+    lastStatusH = 0;
+    reportSize();
+  });
+} catch {
+  // Font API unavailable — the render reports still apply.
+}
 window.petAPI?.onStatusMsg((text) => {
   msgEl.textContent = text;
 });

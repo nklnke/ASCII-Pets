@@ -17,7 +17,7 @@ import {
 import { CellInk, frameCells } from "../shared/color";
 import type { PetSnapshot } from "../shared/ipc";
 import { normalizePack, normalizeStyle, skinMoves, skinName, skinSound, skinSymmetric, styleName, DEFAULT_STYLE } from "../shared/skins";
-import { SocialKind, applySocial, shouldSocialize, socialDurationMs } from "../shared/social";
+import { SocialKind, TrioKind, applySocial, shouldSocialize, shouldSocializeTrio, socialDurationMs } from "../shared/social";
 import {
   Gait,
   TemperamentParams,
@@ -851,10 +851,14 @@ function maybePushPos(now: number): void {
   }
 }
 
-/** Last pair-social timestamp; starts "long ago" so the first meeting fires. */
-let lastSocialAt = -1e12;
+/** Per-pair/trio cooldowns; missing = never met = elapsed. */
+const lastSocial = new Map<string, number>();
 
-/** Running pair scene: checkSocial starts it, socialStep drives the beats. */
+function pairKey(a: number, b: number): string {
+  return a < b ? `${a}-${b}` : `${b}-${a}`;
+}
+
+/** Running scene: checkSocial starts it, socialStep drives the beats. */
 interface SocialState {
   kind: SocialKind;
   since: number;
@@ -864,11 +868,24 @@ interface SocialState {
   /** Shared run direction for chase (race runs apart instead). */
   dir: 1 | -1;
   whooped: boolean;
+  /** Participant slots (2 for pairs, 3 for trio scenes). */
+  slots: number[];
 }
 let social: SocialState | null = null;
 
 function socialActive(now: number): boolean {
   return !!social && now < social.until;
+}
+
+/** Live pets for the running scene's slots (empty when no scene). */
+function sceneParts(): Pet[] {
+  if (!social) return [];
+  const out: Pet[] = [];
+  for (const slot of social.slots) {
+    const p = pets.find((q) => q.slot === slot);
+    if (p) out.push(p);
+  }
+  return out;
 }
 
 /** Cosmetic variant pick (Math.random is fine here — no logic depends on it). */
@@ -901,9 +918,21 @@ function sceneHop(p: Pet, mult = 1): void {
   p.nextHopAt = Date.now() + JUMP_MS + 120;
 }
 
-/** Start the choreography for a fresh social event. */
-function startScene(kind: SocialKind, dur: number, now: number): void {
-  const [a, b] = pets;
+/** "A, B и C" listing for trio messages. */
+function listLabels(ps: Pet[]): string {
+  const names = ps.map((p) => p.label());
+  if (names.length <= 2) return names.join(" и ");
+  const last = names[names.length - 1] ?? "";
+  return `${names.slice(0, -1).join(", ")} и ${last}`;
+}
+
+/** Start the choreography for a fresh social event (pair or trio). */
+function startScene(kind: SocialKind, parts: Pet[], dur: number, now: number): void {
+  if (kind === "huddle" || kind === "parade") {
+    startTrioScene(kind, parts, dur, now);
+    return;
+  }
+  const [a, b] = parts;
   if (!a || !b) return;
   const until = now + dur;
   if (kind === "play") {
@@ -918,7 +947,7 @@ function startScene(kind: SocialKind, dur: number, now: number): void {
     }
     a.startJump(0.6);
     b.startJump(0.6);
-    social = { kind, since: now, until, nextBeat: now + 620, beat: 0, dir: 1, whooped: false };
+    social = { kind, since: now, until, nextBeat: now + 620, beat: 0, dir: 1, whooped: false, slots: [a.slot, b.slot] };
     showMsg(`${a.label()} и ${b.label()} ${pickMsg(["играют!", "затеяли возню!", "резвятся вместе!"])}`);
     playSocial("play", a.skinId);
     playPetSound(a.skinId);
@@ -935,7 +964,7 @@ function startScene(kind: SocialKind, dur: number, now: number): void {
     }
     a.startJump(0.7);
     b.startJump(0.7);
-    social = { kind, since: now, until, nextBeat: now + dur / 2, beat: 0, dir, whooped: false };
+    social = { kind, since: now, until, nextBeat: now + dur / 2, beat: 0, dir, whooped: false, slots: [a.slot, b.slot] };
     showMsg(`${a.label()} и ${b.label()} — ${pickMsg(["догонялки!", "носятся друг за другом!"])}`);
     playSocial("chase", b.skinId);
     playPetSound(b.skinId);
@@ -950,7 +979,7 @@ function startScene(kind: SocialKind, dur: number, now: number): void {
       else p.sniffUntil = until;
       p.nextBlink = now + 400;
     }
-    social = { kind, since: now, until, nextBeat: now + dur / 2, beat: 0, dir: 1, whooped: false };
+    social = { kind, since: now, until, nextBeat: now + dur / 2, beat: 0, dir: 1, whooped: false, slots: [a.slot, b.slot] };
     showMsg(`${a.label()} и ${b.label()} ${pickMsg(["знакомятся нос к носу!", "обнюхиваются!"])}`);
     playSocial("sniff", a.skinId);
     playSniff();
@@ -966,7 +995,7 @@ function startScene(kind: SocialKind, dur: number, now: number): void {
     }
     a.startJump(0.5);
     b.startJump(0.5);
-    social = { kind, since: now, until, nextBeat: now + HAPPY_FRAME_MS, beat: 0, dir, whooped: false };
+    social = { kind, since: now, until, nextBeat: now + HAPPY_FRAME_MS, beat: 0, dir, whooped: false, slots: [a.slot, b.slot] };
     showMsg(`${a.label()} и ${b.label()} ${pickMsg(["танцуют!", "устроили пляски!"])}`);
     playSocial("dance", a.skinId);
     playPetSound(a.skinId);
@@ -983,7 +1012,7 @@ function startScene(kind: SocialKind, dur: number, now: number): void {
     }
     a.startJump(0.7);
     b.startJump(0.7);
-    social = { kind, since: now, until, nextBeat: now + dur / 2, beat: 0, dir: 1, whooped: false };
+    social = { kind, since: now, until, nextBeat: now + dur / 2, beat: 0, dir: 1, whooped: false, slots: [a.slot, b.slot] };
     showMsg(`${a.label()} и ${b.label()} — ${pickMsg(["наперегонки!", "соревнуются, кто быстрее!"])}`);
     playSocial("race", a.skinId);
   } else {
@@ -997,17 +1026,105 @@ function startScene(kind: SocialKind, dur: number, now: number): void {
     }
     a.startJump(0.8);
     b.startJump(0.8);
-    social = { kind, since: now, until, nextBeat: now + 800, beat: 0, dir: 1, whooped: false };
+    social = { kind, since: now, until, nextBeat: now + 800, beat: 0, dir: 1, whooped: false, slots: [a.slot, b.slot] };
     showMsg(`${a.label()} и ${b.label()} ${pickMsg(["повздорили!", "поссорились!"])}`);
     playSocial("squabble", a.skinId);
   }
   renderStats();
 }
 
+/** Trio choreography: the whole pack at once. */
+function startTrioScene(kind: TrioKind, parts: Pet[], dur: number, now: number): void {
+  const lead = parts[0];
+  if (parts.length < 3 || !lead) return;
+  const until = now + dur;
+  if (kind === "huddle") {
+    // Everyone piles toward the middle, face the center, bounce together.
+    const xs = parts.map((p) => p.x);
+    const center = (Math.min(...xs) + Math.max(...xs)) / 2;
+    for (const p of parts) {
+      p.dir = p.x < center ? 1 : -1;
+      lockPet(p, until);
+      holdWalker(p, until);
+      p.happyUntil = until;
+      if (p.hopper()) p.nextHopAt = until;
+    }
+    for (const p of parts) p.startJump(0.6);
+    social = { kind, since: now, until, nextBeat: now + 620, beat: 0, dir: 1, whooped: false, slots: parts.map((p) => p.slot) };
+    showMsg(`${listLabels(parts)} ${pickMsg(["устроили обнимашки!", "сбились в кучку!", "радуются вместе!"])}`);
+    playSocial("huddle", lead.skinId);
+    playPetSound(lead.skinId);
+  } else {
+    // Parade: march in a chain, scurry-locked.
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    for (const p of parts) {
+      p.dir = dir;
+      p.gait = "scurry";
+      lockPet(p, until);
+      p.happyUntil = until;
+      if (p.hopper()) p.nextHopAt = now;
+      else p.sniffUntil = 0;
+    }
+    for (const p of parts) p.startJump(0.7);
+    social = { kind, since: now, until, nextBeat: now + dur / 2, beat: 0, dir, whooped: false, slots: parts.map((p) => p.slot) };
+    showMsg(`${listLabels(parts)} — ${pickMsg(["маршируют!", "устроили парад!"])}`);
+    playSocial("parade", lead.skinId);
+    playPetSound(lead.skinId);
+  }
+  renderStats();
+}
+
+/** Trio scene driver: huddle bounces, parade marches. */
+function trioStep(parts: Pet[], now: number): void {
+  const s = social;
+  if (!s) return;
+  if (s.kind === "huddle") {
+    // Synchronized bouncing, voices round-robin.
+    if (now >= s.nextBeat) {
+      s.beat += 1;
+      s.nextBeat = now + 620;
+      for (const p of parts) p.startJump(0.55);
+      const who = parts[s.beat % parts.length];
+      if (who) playPetSound(who.skinId);
+    }
+  } else if (s.kind === "parade") {
+    // Hold the march lock; the whole chain turns together at edges.
+    for (const p of parts) {
+      p.decideUntil = s.until;
+      if (!p.hopper()) {
+        p.gait = "scurry";
+        p.sniffUntil = 0;
+      }
+    }
+    const atLeft = parts.some((p) => p.x <= EDGE_MARGIN);
+    const atRight = parts.some((p) => p.x >= window.innerWidth - p.width() - EDGE_MARGIN);
+    if (atLeft || atRight) {
+      const dir = (atLeft ? 1 : -1) as 1 | -1;
+      for (const p of parts) {
+        p.dir = dir;
+        p.slowUntil = 0;
+      }
+    }
+    for (const p of parts) {
+      if (p.hopper() && !p.jumping(now) && now >= p.nextHopAt - 200) sceneHop(p, 1);
+    }
+    if (!s.whooped && now >= s.nextBeat) {
+      s.whooped = true;
+      const who = parts[Math.floor(Math.random() * parts.length)];
+      if (who) playPetSound(who.skinId);
+    }
+  }
+}
+
 /** Race finish: whoever got closer to its own edge wins. */
 function finishSocial(now: number): void {
-  const [a, b] = pets;
-  if (social?.kind === "race" && a && b) {
+  const parts = sceneParts();
+  if (social?.kind === "race" && parts.length >= 2) {
+    const [a, b] = parts;
+    if (!a || !b) {
+      social = null;
+      return;
+    }
     const scoreA = a.dir === 1 ? a.x : window.innerWidth - a.x;
     const scoreB = b.dir === 1 ? b.x : window.innerWidth - b.x;
     if (Math.abs(scoreA - scoreB) < 40) {
@@ -1025,17 +1142,32 @@ function finishSocial(now: number): void {
 
 /** Per-frame scene driver: keeps the choreography alive until `until`. */
 function socialStep(now: number): void {
-  if (!social) return;
-  const [a, b] = pets;
-  if (!a || !b || dragPet || paused || a.sleeping() || b.sleeping()) {
+  const st = social;
+  if (!st) return;
+  const parts = sceneParts();
+  if (
+    parts.length !== st.slots.length ||
+    paused ||
+    (dragPet !== null && parts.includes(dragPet)) ||
+    parts.some((p) => p.sleeping())
+  ) {
     social = null;
     return;
   }
-  if (now >= social.until) {
+  if (now >= st.until) {
     finishSocial(now);
     return;
   }
-  const s = social;
+  if (st.kind === "huddle" || st.kind === "parade") {
+    trioStep(parts, now);
+    return;
+  }
+  const [a, b] = parts;
+  if (!a || !b) {
+    social = null;
+    return;
+  }
+  const s = st;
   if (s.kind === "play") {
     // Synchronized bouncing, alternating voices.
     if (now >= s.nextBeat) {
@@ -1126,23 +1258,52 @@ function socialStep(now: number): void {
   }
 }
 
-/** Pair meeting: close pets start a 2–4s scene (mood + energy + choreography). */
+/** Meetings: close pets start 2–4s scenes — the whole trio, or one pair. */
 function checkSocial(now: number): void {
-  if (paused || pets.length < 2) return;
-  const [a, b] = pets;
-  if (!a || !b || dragPet) return;
-  if (a.sleeping() || b.sleeping()) return;
+  if (paused || dragPet || pets.length < 2) return;
   if (socialActive(now)) return;
   if (social) finishSocial(now);
-  const kind: SocialKind | null = shouldSocialize(Math.abs(a.x - b.x), now - lastSocialAt, Math.random());
-  if (!kind) return;
-  lastSocialAt = now;
+  // Trio first: the whole cluster piles in together.
+  if (pets.length >= 3 && pets.every((p) => !p.sleeping())) {
+    const xs = pets.map((p) => p.x);
+    const maxDist = Math.max(...xs) - Math.min(...xs);
+    const trio = shouldSocializeTrio(maxDist, now - (lastSocial.get("trio") ?? -1e12), Math.random());
+    if (trio) {
+      lastSocial.set("trio", now);
+      const dur = socialDurationMs(Math.random());
+      for (const p of pets) {
+        p.stats = applySocial(p.stats, trio, now);
+        saveStats(p.slot, p.stats);
+      }
+      startScene(trio, [...pets], dur, now);
+      return;
+    }
+  }
+  // Pairs: every awake duo is eligible; pick one at random (no slot bias).
+  const cands: Array<{ a: Pet; b: Pet; kind: SocialKind }> = [];
+  for (let i = 0; i < pets.length; i++) {
+    for (let j = i + 1; j < pets.length; j++) {
+      const a = pets[i];
+      const b = pets[j];
+      if (!a || !b || a.sleeping() || b.sleeping()) continue;
+      const kind = shouldSocialize(
+        Math.abs(a.x - b.x),
+        now - (lastSocial.get(pairKey(a.slot, b.slot)) ?? -1e12),
+        Math.random(),
+      );
+      if (kind) cands.push({ a, b, kind });
+    }
+  }
+  if (cands.length === 0) return;
+  const pick = cands[Math.floor(Math.random() * cands.length)];
+  if (!pick) return;
+  lastSocial.set(pairKey(pick.a.slot, pick.b.slot), now);
   const dur = socialDurationMs(Math.random());
-  a.stats = applySocial(a.stats, kind, now);
-  b.stats = applySocial(b.stats, kind, now);
-  saveStats(a.slot, a.stats);
-  saveStats(b.slot, b.stats);
-  startScene(kind, dur, now);
+  for (const p of [pick.a, pick.b]) {
+    p.stats = applySocial(p.stats, pick.kind, now);
+    saveStats(p.slot, p.stats);
+  }
+  startScene(pick.kind, [pick.a, pick.b], dur, now);
 }
 
 /** Reconcile live pets with the pack from main (slot = index). */

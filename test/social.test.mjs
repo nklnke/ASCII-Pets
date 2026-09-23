@@ -7,7 +7,9 @@ import {
   SOCIAL_RADIUS,
   applySocial,
   pickSocial,
+  pickTrioSocial,
   shouldSocialize,
+  shouldSocializeTrio,
   socialDurationMs,
   socialEnergyDelta,
   socialMoodDelta,
@@ -45,6 +47,22 @@ describe("social", () => {
     assert.equal(socialEnergyDelta("sniff"), 0);
     assert.ok(socialEnergyDelta("chase") < 0);
     assert.ok(socialEnergyDelta("race") < socialEnergyDelta("chase"));
+  });
+
+  it("trio scenes trigger on a tight cluster after cooldown", () => {
+    assert.equal(pickTrioSocial(0), "huddle");
+    assert.equal(pickTrioSocial(0.9), "parade");
+    assert.equal(shouldSocializeTrio(SOCIAL_RADIUS + 1, SOCIAL_COOLDOWN_MS, 0), null);
+    assert.equal(shouldSocializeTrio(10, SOCIAL_COOLDOWN_MS - 1, 0), null);
+    assert.equal(shouldSocializeTrio(10, SOCIAL_COOLDOWN_MS, 0.1), "huddle");
+    assert.equal(shouldSocializeTrio(10, -1, 0.8), "parade");
+  });
+
+  it("huddle/parade cheer up and cost energy", () => {
+    assert.ok(socialMoodDelta("huddle") > 0);
+    assert.ok(socialMoodDelta("parade") > 0);
+    assert.ok(socialEnergyDelta("huddle") < 0);
+    assert.ok(socialEnergyDelta("parade") < socialEnergyDelta("huddle"));
   });
 
   it("scene length rolls within 2-4s", () => {

@@ -276,6 +276,17 @@ export function playSocial(kind: string, skinId: string): void {
     tone(500, 60, type, 120, gain);
     tone(650, 60, type, 190, gain);
     tone(800, 90, type, 260, gain);
+  } else if (kind === "huddle") {
+    // warm chord: everyone piles in at once
+    tone(523, 140, type, 0, gain);
+    tone(659, 140, type, 20, gain);
+    tone(784, 180, type, 40, gain);
+  } else if (kind === "parade") {
+    // march: oom-pah stride
+    tone(392, 90, type, 0, gain);
+    tone(523, 90, type, 110, gain);
+    tone(392, 90, type, 220, gain);
+    tone(659, 130, type, 330, gain);
   } else {
     // squabble: dissonant low clash
     tone(180, 200, "square", 0, 0.07);
