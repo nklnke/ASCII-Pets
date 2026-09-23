@@ -4,12 +4,15 @@
 
 import type { PetStats } from "./pet-stats";
 
-export type SocialKind = "play" | "chase" | "squabble";
+export type SocialKind = "play" | "chase" | "squabble" | "sniff" | "dance" | "race";
 
 /** Pixel distance (by pet x) that counts as "met". */
 export const SOCIAL_RADIUS = 140;
 /** Min silence between socials so pets don't spam messages. */
 export const SOCIAL_COOLDOWN_MS = 25_000;
+/** Interaction scene length bounds (ms): renderer rolls within. */
+export const SOCIAL_MIN_MS = 2000;
+export const SOCIAL_MAX_MS = 4000;
 
 function clamp(n: number): number {
   return Math.min(100, Math.max(0, Math.round(n)));
@@ -17,9 +20,12 @@ function clamp(n: number): number {
 
 /** Deterministic pick: pass Math.random() from the caller (testable). */
 export function pickSocial(r: number): SocialKind {
-  if (r < 0.5) return "play";
-  if (r < 0.8) return "chase";
-  return "squabble";
+  if (r < 0.3) return "play";
+  if (r < 0.5) return "chase";
+  if (r < 0.62) return "squabble";
+  if (r < 0.77) return "sniff";
+  if (r < 0.89) return "dance";
+  return "race";
 }
 
 /**
@@ -41,10 +47,45 @@ export function socialMoodDelta(kind: SocialKind): number {
       return 4;
     case "squabble":
       return -3;
+    case "sniff":
+      return 3;
+    case "dance":
+      return 8;
+    case "race":
+      return 5;
   }
 }
 
-/** Apply the mood effect of a social event. */
+/** Energy delta for one social event (running costs; sniffing is free). */
+export function socialEnergyDelta(kind: SocialKind): number {
+  switch (kind) {
+    case "play":
+      return -4;
+    case "chase":
+      return -8;
+    case "squabble":
+      return -2;
+    case "sniff":
+      return 0;
+    case "dance":
+      return -5;
+    case "race":
+      return -12;
+  }
+}
+
+/** Scene length roll: pass Math.random() from the caller (testable). */
+export function socialDurationMs(r: number): number {
+  const t = Math.min(1, Math.max(0, r));
+  return Math.round(SOCIAL_MIN_MS + t * (SOCIAL_MAX_MS - SOCIAL_MIN_MS));
+}
+
+/** Apply the mood + energy effect of a social event. */
 export function applySocial(s: PetStats, kind: SocialKind, now: number): PetStats {
-  return { ...s, mood: clamp(s.mood + socialMoodDelta(kind)), updatedAt: now };
+  return {
+    ...s,
+    mood: clamp(s.mood + socialMoodDelta(kind)),
+    energy: clamp(s.energy + socialEnergyDelta(kind)),
+    updatedAt: now,
+  };
 }
