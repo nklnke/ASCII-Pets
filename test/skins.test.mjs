@@ -95,4 +95,58 @@ describe("skins", () => {
     // framesFor falls back to the ASCII1 cat for unknown ids.
     assert.equal(m.framesFor("nope", "nope").walkRight[0], m.SKIN_STYLES.ascii1.cat.walkRight[0]);
   });
+
+  it("ascii4 is full-block only, color tables match frames, palettes cover every letter", async () => {
+    const esbuild = await import("esbuild");
+    const built = await esbuild.build({
+      entryPoints: [path.join(ROOT, "src", "renderer", "ascii.ts")],
+      bundle: true,
+      format: "esm",
+      write: false,
+      logLevel: "error",
+    });
+    const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "ascii-color-")), "ascii.mjs");
+    fs.writeFileSync(out, built.outputFiles[0].text);
+    const m = await import(pathToFileURL(out).href);
+    const fills = new Set(["█", "●", "U", "o", "-", "?", "z", " ", "\n"]);
+    for (const { id } of SKIN_LIST) {
+      const skin = m.SKIN_STYLES.ascii4[id];
+      const colors = m.SKIN_STYLE_COLORS.ascii4[id];
+      const pal = m.ASCII4_PALETTES[id];
+      assert.ok(colors, `missing color tables for ${id}`);
+      assert.ok(pal, `missing palette for ${id}`);
+      const poses = ["walkRight", "walkLeft", "happy", "hungry", "sleep", "jump"];
+      for (const pose of poses) {
+        assert.equal(colors[pose].length, skin[pose].length, `ascii4/${id}/${pose}: table size`);
+        for (let i = 0; i < skin[pose].length; i++) {
+          const rows = skin[pose][i].split("\n");
+          const grows = colors[pose][i].split("\n");
+          assert.equal(grows.length, rows.length, `ascii4/${id}/${pose}#${i}: grid size`);
+          rows.forEach((row, r) => {
+            assert.equal(grows[r].length, row.length, `ascii4/${id}/${pose}#${i} row ${r}: width`);
+          });
+        }
+      }
+      const frames = [
+        ...skin.walkRight,
+        ...skin.walkLeft,
+        ...skin.happy,
+        ...skin.hungry,
+        ...skin.sleep,
+        ...skin.jump,
+        skin.blink,
+        skin.eat,
+      ];
+      for (const f of frames) {
+        for (const ch of f) {
+          assert.ok(fills.has(ch), `ascii4/${id}: non-fill glyph ${JSON.stringify(ch)}`);
+        }
+      }
+      const letters = [colors.blink, colors.eat, ...poses.flatMap((p) => colors[p])].join("\n");
+      for (const ch of letters) {
+        if (ch === " " || ch === "." || ch === "\n") continue;
+        assert.ok(typeof pal[ch] === "string", `ascii4/${id}: no color for ${JSON.stringify(ch)}`);
+      }
+    }
+  });
 });

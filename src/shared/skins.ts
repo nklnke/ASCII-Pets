@@ -55,6 +55,7 @@ export const STYLE_LIST: StyleMeta[] = [
   { id: "ascii1", name: "ASCII 1 — классика" },
   { id: "ascii2", name: "ASCII 2 — блоки" },
   { id: "ascii3", name: "ASCII 3 — тамагочи" },
+  { id: "ascii4", name: "ASCII 4 — пиксель" },
 ];
 
 export const DEFAULT_STYLE = "ascii1";
@@ -66,4 +67,14 @@ export function normalizeStyle(style: unknown): string {
 
 export function styleName(id: string): string {
   return STYLE_LIST.find((s) => s.id === id)?.name ?? id;
+}
+
+/** Styles with one shared silhouette (drop-shadow filter, no per-glyph shadows). */
+export function styleFlat(styleId: string): boolean {
+  return styleId === "ascii3" || styleId === "ascii4";
+}
+
+/** Styles with fixed per-glyph colors (opt out of auto-inversion). */
+export function styleColored(styleId: string): boolean {
+  return styleId === "ascii4";
 }

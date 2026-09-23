@@ -1,4 +1,4 @@
-import { POOP_STINK, SkinFrames, framesFor, poopFor } from "./ascii";
+import { POOP_STINK, SkinFrames, framesFor, poopFor, ASCII4_PALETTES, colorsFor } from "./ascii";
 import {
   PetStats,
   TIRED_AT,
@@ -17,7 +17,7 @@ import {
 } from "../shared/pet-stats";
 import { CellInk, frameCells } from "../shared/color";
 import type { PetSnapshot } from "../shared/ipc";
-import { normalizePack, normalizeStyle, skinMoves, skinName, skinSound, skinSymmetric, styleName, DEFAULT_STYLE } from "../shared/skins";
+import { normalizePack, normalizeStyle, skinMoves, skinName, skinSound, skinSymmetric, styleColored, styleFlat, styleName, DEFAULT_STYLE } from "../shared/skins";
 import { songDurationMs, songFor, songsFor } from "../shared/songs";
 import { SocialKind, TrioKind, applySocial, shouldSocialize, shouldSocializeTrio, socialDurationMs } from "../shared/social";
 import {
@@ -82,7 +82,55 @@ const MAX_NOTES = 6;
 interface PoopPile {
   wrap: HTMLDivElement;
   stink: HTMLPreElement;
+  canvas: HTMLCanvasElement;
   x: number;
+}
+
+/** Pile ink (matches the old .poop CSS color). */
+const POOP_INK = "#c98a4b";
+
+/** Paint a text grid as seamless fills (shared by pets and poop piles).
+ *  Backing store first (CSS size derives from it: 1:1 device pixels, no
+ *  resampling seams); rect edges snap to integer device px with <=1px
+ *  overlap (overlap instead of gaps). Skip a cell by returning null. */
+function paintCanvas(
+  cv: HTMLCanvasElement,
+  rows: string[],
+  colorAt: (c: number, r: number, ch: string) => string | null,
+  cell: { w: number; h: number },
+): void {
+  const ctx = cv.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  if (!ctx) return;
+  const cols = Math.max(0, ...rows.map((r) => r.length));
+  const bw = Math.max(1, Math.round(cols * cell.w * dpr));
+  const bh = Math.max(1, Math.round(rows.length * cell.h * dpr));
+  if (cv.width !== bw || cv.height !== bh) {
+    cv.width = bw;
+    cv.height = bh;
+  }
+  cv.style.width = `${bw / dpr}px`;
+  cv.style.height = `${bh / dpr}px`;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, bw / dpr, bh / dpr);
+  const px = (n: number): number => Math.round(n * cell.w * dpr) / dpr;
+  const py = (n: number): number => Math.round(n * cell.h * dpr) / dpr;
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r] ?? "";
+    for (let c = 0; c < row.length; c++) {
+      const ch = row[c] ?? " ";
+      if (ch === " ") continue;
+      const css = colorAt(c, r, ch);
+      if (!css) continue;
+      ctx.fillStyle = css;
+      ctx.fillRect(px(c), py(r), px(c + 1) - px(c) + 1 / dpr, py(r + 1) - py(r) + 1 / dpr);
+    }
+  }
+}
+
+/** (Re)draw one poop pile from the current style art. */
+function drawPoop(canvas: HTMLCanvasElement): void {
+  paintCanvas(canvas, poopFor(style).split("\n"), () => POOP_INK, measureCell());
 }
 
 let paused = false;
@@ -126,7 +174,12 @@ function applyScale(scale: number): void {
   if (typeof scale !== "number" || !(scale > 0) || !isFinite(scale)) return;
   document.documentElement.style.setProperty("--pet-scale", String(scale));
   cellMetrics = null;
-  for (const p of pets) p.renderPosition(Date.now());
+  for (const p of pets) {
+    p.renderPosition(Date.now());
+    // Cell metrics changed: force the canvas twin to re-measure + redraw.
+    p.drawnText = null;
+    p.drawSprite();
+  }
   renderStats();
 }
 
@@ -167,7 +220,11 @@ function measureCell(): CellMetrics {
 class Pet {
   readonly slot: number;
   skinId: string;
-  el: HTMLPreElement;
+  el: HTMLElement;
+  /** Canvas twin for the pixel style (ascii4): seamless fills. */
+  cv: HTMLCanvasElement | null = null;
+  cvDpr = 0;
+  drawnText: string | null = null;
   x: number;
   dir: 1 | -1 = 1;
   frame = 0;
@@ -218,6 +275,9 @@ class Pet {
   /** Painted flag + last painted values (incremental paintInk skips equals). */
   inkPainted = false;
   inkCache: { w: number; h: number; colors: string[]; shadows: string[] } | null = null;
+  /** Colored styles: color-letter tables + the grid for the shown frame. */
+  colorFr: SkinFrames | null = null;
+  colorGrid: string[] | null = null;
   shownText: string | null = null;
   gridW = 0;
   gridH = 0;
@@ -246,9 +306,10 @@ class Pet {
     this.nextSongAt = Date.now() + SONG_MIN_MS + slot * 45_000 + Math.random() * 120_000;
     this.el = document.createElement("pre");
     this.el.className = "pet";
-    this.el.classList.toggle("flat", style === "ascii3");
+    this.el.classList.toggle("flat", styleFlat(style));
     stageEl.appendChild(this.el);
-    this.wireEvents();
+    this.wireEvents(this.el);
+    this.syncElement();
     this.renderPosition(Date.now());
     // The mess waits for you: restore uncleaned piles after restart.
     for (const x of loadPoop(slot)) this.dropPoop(x, true);
@@ -256,6 +317,62 @@ class Pet {
 
   frames(): SkinFrames {
     return framesFor(style, this.skinId);
+  }
+
+  /** Visible body: canvas for the pixel style, text element otherwise. */
+  hitEl(): HTMLElement {
+    return styleColored(style) && this.cv ? this.cv : this.el;
+  }
+
+  /** Show the canvas twin in the pixel style, the text element elsewhere. */
+  syncElement(): void {
+    const wantCanvas = styleColored(style);
+    if (wantCanvas && !this.cv) {
+      const cv = document.createElement("canvas");
+      cv.className = "petcanvas";
+      this.wireEvents(cv);
+      stageEl.appendChild(cv);
+      this.cv = cv;
+    }
+    if (this.cv) {
+      this.cv.classList.toggle("flat", styleFlat(style));
+      this.cv.style.display = wantCanvas ? "" : "none";
+    }
+    this.el.style.display = wantCanvas ? "none" : "";
+    this.drawnText = null;
+  }
+
+  /** Draw the shown frame as seamless fills (pixel style only). */
+  drawSprite(): void {
+    const cv = this.cv;
+    const text = this.shownText;
+    const dpr = window.devicePixelRatio || 1;
+    if (!cv || !text) return;
+    if (text === this.drawnText && dpr === this.cvDpr) return;
+    const cell = measureCell();
+    const pal = ASCII4_PALETTES[this.skinId] ?? ASCII4_PALETTES["cat"] ?? {};
+    // Never white: an unmatched cell falls back to fur, so a lookup miss
+    // can never flash (TEMP-DIAG reports the miss instead — remove after).
+    const fur = pal["k"] ?? "#ffffff";
+    const crows = this.colorGrid ?? [];
+    paintCanvas(
+      cv,
+      text.split("\n"),
+      (c, r, ch) => {
+        const key = crows[r]?.[c] ?? ch;
+        return (key !== " " ? pal[key] : undefined) ?? pal[ch] ?? fur;
+      },
+      cell,
+    );
+    this.drawnText = text;
+    this.cvDpr = dpr;
+  }
+
+  /** Swap the skin on a live pet (forces a frame + color rebuild). */
+  setSkin(skinId: string): void {
+    if (this.skinId === skinId) return;
+    this.skinId = skinId;
+    this.shownText = null;
   }
 
   hopper(): boolean {
@@ -301,7 +418,7 @@ class Pet {
 
   /** Fright: turn away from the scare point and hop off. */
   startle(fromX: number): void {
-    const rect = this.el.getBoundingClientRect();
+    const rect = this.hitEl().getBoundingClientRect();
     const center = rect.left + rect.width / 2;
     this.dir = fromX < center ? 1 : -1;
     this.slowUntil = Date.now() + TURN_SLOW_MS;
@@ -317,7 +434,7 @@ class Pet {
   }
 
   width(): number {
-    return this.el.offsetWidth || 120;
+    return this.hitEl().offsetWidth || 120;
   }
 
   clampX(value: number): number {
@@ -332,11 +449,18 @@ class Pet {
       console.warn(`[teleport] ${this.label()} slot=${this.slot} x ${this.lastRx} -> ${rx}`);
     }
     this.lastRx = rx;
-    // Fast motion on fractional pixels shimmers (glyphs + text-shadow hang
-    // between LCD pixels), so snap X to whole pixels at speed. Slow speeds
-    // keep the fraction: integer rounding there stepped visibly.
-    const qx = Math.abs(this.speedCur) > 50 ? Math.round(this.x) : this.x;
-    this.el.style.transform = `translateX(${qx.toFixed(1)}px) translateY(${this.yOffset(now).toFixed(1)}px)`;
+    // Flat (pixel) styles snap X to whole pixels at any speed: glyphs
+    // rasterize per-cell, and fractional offsets open hairline seams between
+    // adjacent blocks. Other styles keep the fraction (integer rounding there
+    // stepped visibly at low speeds); fast motion snaps too (same shimmer).
+    const qx = styleFlat(style) || Math.abs(this.speedCur) > 50 ? Math.round(this.x) : this.x;
+    // Defensive: the flat silhouette class must never desync from the style
+    // (missed IPC race leaves per-glyph shadows + row slits = grid look).
+    const wantFlat = styleFlat(style);
+    if (this.el.classList.contains("flat") !== wantFlat) this.el.classList.toggle("flat", wantFlat);
+    const t = `translateX(${qx.toFixed(1)}px) translateY(${this.yOffset(now).toFixed(1)}px)`;
+    this.el.style.transform = t;
+    if (this.cv) this.cv.style.transform = t;
   }
 
   /** Vertical glyph offset (jump arc + stride bob) for the backdrop sampler. */
@@ -366,6 +490,8 @@ class Pet {
   setFrame(text: string): void {
     if (text === this.shownText) return;
     this.shownText = text;
+    this.colorFr = colorsFor(style, this.skinId);
+    this.colorGrid = styleColored(style) ? this.colorGridFor(text) : null;
     const grid = frameCells(text);
     const rows = text.split("\n");
     if (
@@ -383,6 +509,8 @@ class Pet {
           if (s.textContent !== ch) s.textContent = ch;
         }
       }
+      // Fixed palettes follow every glyph swap (legs, blinking eyes, ...).
+      if (styleColored(style)) this.drawSprite();
       return;
     }
     this.gridW = grid.w;
@@ -414,9 +542,14 @@ class Pet {
     this.paintInk();
   }
 
-  /** Paint the stored per-cell ink onto the live spans (only changed cells). */
+  /** Paint the stored per-cell ink onto the live spans (only changed cells).
+   *  The pixel style draws its canvas instead (no inversion, fixed palette). */
   paintInk(): void {
     const ink = this.ink;
+    if (styleColored(style)) {
+      this.drawSprite();
+      return;
+    }
     if (!ink) {
       if (this.inkPainted) {
         for (const s of this.cellSpans) {
@@ -441,7 +574,7 @@ class Pet {
       const color = ink.colors[i];
       const shadow = ink.shadows[i];
       if (typeof color !== "string" || typeof shadow !== "string") continue;
-      const shadowCss = style === "ascii3" ? "" : `0 0 4px ${shadow}, 1px 1px 0 ${shadow}`;
+      const shadowCss = styleFlat(style) ? "" : `0 0 4px ${shadow}, 1px 1px 0 ${shadow}`;
       // Unchanged cells keep their styles: no style recalc, no repaint.
       if (sameGrid && cache.colors[i] === color && cache.shadows[i] === shadowCss) continue;
       s.style.color = color;
@@ -456,9 +589,34 @@ class Pet {
       colors: ink.colors.slice(),
       shadows: ink.colors.map((_, i) => {
         const sh = ink.shadows[i];
-        return style === "ascii3" ? "" : `0 0 4px ${sh}, 1px 1px 0 ${sh}`;
+        return styleFlat(style) ? "" : `0 0 4px ${sh}, 1px 1px 0 ${sh}`;
       }),
     };
+  }
+
+  /** Color-letter grid for a text frame (same pose + index in the tables). */
+  colorGridFor(text: string): string[] | null {
+    const cf = this.colorFr;
+    const fr = this.frames();
+    if (!cf) return null;
+    const pools: Array<[string[], string[]]> = [
+      [fr.walkRight, cf.walkRight],
+      [fr.walkLeft, cf.walkLeft],
+      [fr.happy, cf.happy],
+      [fr.hungry, cf.hungry],
+      [fr.sleep, cf.sleep],
+      [fr.jump, cf.jump],
+    ];
+    for (const [tp, cp] of pools) {
+      const i = tp.indexOf(text);
+      if (i >= 0 && i < cp.length) {
+        const g = cp[i];
+        return g !== undefined ? g.split("\n") : null;
+      }
+    }
+    if (fr.blink === text) return cf.blink.split("\n");
+    if (fr.eat === text) return cf.eat.split("\n");
+    return null;
   }
 
   doPet(): void {
@@ -530,17 +688,16 @@ class Pet {
     }
     const wrap = document.createElement("div");
     wrap.className = "poop-wrap";
-    wrap.classList.toggle("flat", style === "ascii3");
+    wrap.classList.toggle("flat", styleFlat(style));
     wrap.style.transform = `translateX(${Math.round(px)}px)`;
     wrap.title = "Клик — убрать";
     const stink = document.createElement("pre");
     stink.className = "stink";
     stink.textContent = POOP_STINK[0];
-    const el = document.createElement("pre");
-    el.className = "poop";
-    el.textContent = poopFor(style);
+    const canvas = document.createElement("canvas");
+    canvas.className = "poopcanvas";
     wrap.appendChild(stink);
-    wrap.appendChild(el);
+    wrap.appendChild(canvas);
     // Click-through everywhere except the pile: same contract as the pet.
     wrap.addEventListener("mouseenter", () => {
       window.petAPI?.setClickable(true);
@@ -554,7 +711,8 @@ class Pet {
       window.petAPI?.showMenu();
     });
     stageEl.appendChild(wrap);
-    this.piles.push({ wrap, stink, x: px });
+    this.piles.push({ wrap, stink, canvas, x: px });
+    drawPoop(canvas);
     // Gentle fade-in (same 300ms curve as the fade-out below).
     wrap.classList.add("poop-enter");
     void wrap.offsetWidth;
@@ -864,43 +1022,45 @@ class Pet {
     saveStats(this.slot, this.stats);
     for (const pile of this.piles) pile.wrap.remove();
     this.piles = [];
+    this.cv?.remove();
+    this.cv = null;
     this.el.remove();
   }
 
-  wireEvents(): void {
+  wireEvents(target: HTMLElement): void {
     // Click = pet it (delayed so a double-click feeds instead of petting twice).
-    this.el.addEventListener("click", () => {
+    target.addEventListener("click", () => {
       window.clearTimeout(this.clickTimer);
       this.clickTimer = window.setTimeout(() => this.doPet(), CLICK_DELAY_MS);
     });
-    this.el.addEventListener("dblclick", (e: MouseEvent) => {
+    target.addEventListener("dblclick", (e: MouseEvent) => {
       e.preventDefault();
       window.clearTimeout(this.clickTimer);
       this.doFeed();
     });
 
     // Click-through everywhere except the pet: enable mouse events on hover.
-    this.el.addEventListener("mouseenter", () => {
+    target.addEventListener("mouseenter", () => {
       window.petAPI?.setClickable(true);
     });
-    this.el.addEventListener("mouseleave", () => {
+    target.addEventListener("mouseleave", () => {
       if (dragPet !== this) window.petAPI?.setClickable(false);
     });
 
     // Drag the pet: mousedown grabs, window mousemove carries.
     // Offset from the VISUAL rect (transform may lag logical x) — no snap.
-    this.el.addEventListener("mousedown", (e: MouseEvent) => {
+    target.addEventListener("mousedown", (e: MouseEvent) => {
       if (e.button !== 0) return;
       dragPet = this;
       this.speedCur = 0;
       this.strideAcc = 0;
       this.flingUntil = 0;
       dragTrail = [{ x: e.clientX, t: Date.now() }];
-      grabOffset = e.clientX - this.el.getBoundingClientRect().left;
+      grabOffset = e.clientX - this.hitEl().getBoundingClientRect().left;
     });
 
     // Right-click menu (built in main).
-    this.el.addEventListener("contextmenu", (e: MouseEvent) => {
+    target.addEventListener("contextmenu", (e: MouseEvent) => {
       e.preventDefault();
       window.petAPI?.showMenu();
     });
@@ -927,7 +1087,7 @@ function renderStats(): void {
         ox: Math.round(p.x) + cell.padL,
         // Bottom-anchored pets: text top = strip bottom edge, minus the
         // element height, plus padding and the live jump/bob offset.
-        oy: Math.round(window.innerHeight - cell.bottom - p.el.offsetHeight + cell.padT + p.yOffset(now)),
+        oy: Math.round(window.innerHeight - cell.bottom - p.hitEl().offsetHeight + cell.padT + p.yOffset(now)),
         charW: cell.w,
         charH: cell.h,
         cols: grid.cols,
@@ -1419,7 +1579,7 @@ function applyPack(skins: string[]): void {
   pack.forEach((skinId, i) => {
     const existing = pets[i];
     if (existing) {
-      existing.skinId = skinId;
+      existing.setSkin(skinId);
     } else {
       const added = new Pet(i, skinId, 100 + i * 160);
       added.x = added.clampX(added.x);
@@ -1578,26 +1738,28 @@ window.petAPI?.onPetStartle(() => {
   }
 });
 window.petAPI?.onSetPack((skins) => applyPack(skins));
-window.petAPI?.onSetStyle((next) => {
+/** Apply a drawing style pack-wide: frames, silhouette class, pile art. */
+function applyStyle(next: string, announce: boolean): void {
   style = normalizeStyle(next);
   // Next animation tick picks frames from the new set (grids rebuild
   // themselves); just announce it and refresh the sampler snapshot.
-  showMsg(`Стиль: ${styleName(style)}`);
-  // Pixel style drops per-glyph shadows for one shared silhouette.
+  if (announce) showMsg(`Стиль: ${styleName(style)}`);
+  // Flat styles fuse glyphs into one blob with a shared silhouette.
   for (const p of pets) {
-    p.el.classList.toggle("flat", style === "ascii3");
+    p.el.classList.toggle("flat", styleFlat(style));
+    p.syncElement();
     p.paintInk();
   }
   // Piles already on the ground switch pile art immediately (stink stays).
   for (const p of pets) {
     for (const pile of p.piles) {
-      pile.wrap.classList.toggle("flat", style === "ascii3");
-      const pileEl = pile.wrap.querySelector(".poop");
-      if (pileEl) pileEl.textContent = poopFor(style);
+      pile.wrap.classList.toggle("flat", styleFlat(style));
+      drawPoop(pile.canvas);
     }
   }
   renderStats();
-});
+}
+window.petAPI?.onSetStyle((next) => applyStyle(next, true));
 window.petAPI?.onSetColorMode((on) => {
   if (!on) clearInk();
 });
@@ -1615,7 +1777,7 @@ window.petAPI?.onSetScale((s: number) => applyScale(s));
 applyPack(["cat"]);
 void window.petAPI?.getPack?.().then((skins) => applyPack(skins));
 void window.petAPI?.getStyle?.().then((s) => {
-  style = normalizeStyle(s);
+  applyStyle(s, false);
 });
 void window.petAPI?.getMuted?.().then((m) => setMuted(!!m));
 void window.petAPI?.getScale?.().then((s) => applyScale(s));

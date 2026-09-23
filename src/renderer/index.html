@@ -79,7 +79,10 @@
   }
   /* Pixel style (ascii3): one shared silhouette for the pile + waves. */
   #stage .poop-wrap.flat {
-    filter: drop-shadow(1px 1px 0 #000);
+    filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.9));
+  }
+  #stage .poop-wrap canvas {
+    display: block;
   }
   #stage .poop-wrap.flat .poop,
   #stage .poop-wrap.flat .stink {
@@ -89,7 +92,10 @@
      text-shadow turns to mud — one shared silhouette instead. */
   #stage .pet.flat {
     text-shadow: none;
-    filter: drop-shadow(1px 1px 0 #000);
+    filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.9));
+    /* Block rows overlap slightly (font metrics leave hairline slits
+       between full-block rows even at line-height 1). */
+    line-height: 0.9;
   }
   /* Floating music notes: pop above the head, drift up, fade out.
      pointer-events:none keeps the click-through contract intact. */
@@ -116,6 +122,19 @@
   /* Per-glyph ink: each symbol carries its own inverted color. */
   #stage .pet span {
     transition: color 300ms linear, text-shadow 300ms linear;
+  }
+  /* Pixel-canvas pets (ascii4): seamless fills, one shared silhouette. */
+  #stage canvas.petcanvas {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    display: block;
+    margin: 0;
+    padding: 8px 8px 0;
+    cursor: pointer;
+  }
+  #stage canvas.petcanvas.flat {
+    filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.9));
   }
 </style>
 </head>

@@ -930,7 +930,10 @@ void app.whenReady().then(() => {
   // Settings window (opened from the menu or the status ⚙ button).
   ipcMain.on("open-settings", () => openSettings());
   ipcMain.on("settings-hide", () => {
-    if (settingsWin && !settingsWin.isDestroyed()) settingsWin.hide();
+    // hide() proved unreliable for this window config (stays visible);
+    // destroy instead — reopening recreates it cheaply.
+    if (settingsWin && !settingsWin.isDestroyed()) settingsWin.destroy();
+    settingsWin = null;
   });
   ipcMain.handle("get-settings", () => settingsSnapshot());
   ipcMain.handle("get-displays", () => displayList());
