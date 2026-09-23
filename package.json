@@ -7,7 +7,7 @@
   "scripts": {
     "build:main": "tsc",
     "check": "tsc --noEmit -p tsconfig.check.json",
-    "build:renderer": "esbuild src/renderer/renderer.ts --bundle --format=iife --outfile=dist/renderer/renderer.js && esbuild src/renderer/status.ts --bundle --format=iife --outfile=dist/renderer/status.js && node -e \"require('fs').mkdirSync('dist/renderer',{recursive:true});require('fs').copyFileSync('src/renderer/index.html','dist/renderer/index.html');require('fs').copyFileSync('src/renderer/status.html','dist/renderer/status.html')\"",
+    "build:renderer": "esbuild src/renderer/renderer.ts --bundle --format=iife --outfile=dist/renderer/renderer.js && esbuild src/renderer/status.ts --bundle --format=iife --outfile=dist/renderer/status.js && esbuild src/renderer/settings.ts --bundle --format=iife --outfile=dist/renderer/settings.js && node -e \"require('fs').mkdirSync('dist/renderer',{recursive:true});require('fs').copyFileSync('src/renderer/index.html','dist/renderer/index.html');require('fs').copyFileSync('src/renderer/status.html','dist/renderer/status.html');require('fs').copyFileSync('src/renderer/settings.html','dist/renderer/settings.html')\"",
     "build": "npm run build:main && npm run check && npm run build:renderer",
     "test": "npm run build:main && node --test test/pet-stats.test.mjs test/placement.test.mjs test/skins.test.mjs test/temperament.test.mjs test/color.test.mjs test/notify.test.mjs test/social.test.mjs",
     "dev": "node scripts/dev.js",
@@ -41,7 +41,7 @@
       "shortcutName": "ASCII Pets"
     },
     "portable": {
-      "artifactName": "${productName} ${version} Portable.${ext}"
+      "artifactName": "${productName} Portable ${version}.${ext}"
     }
   },
   "keywords": [],
