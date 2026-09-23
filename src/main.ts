@@ -1,12 +1,13 @@
 import { app, BrowserWindow, Menu, MenuItemConstructorOptions, Tray, Notification, desktopCapturer, ipcMain, screen } from "electron";
+import type { Display } from "electron";
 import * as fs from "fs";
 import * as path from "path";
 import { cssRgb, invertRgb, medianRgb, cellCenter, Rgb, CellInk } from "./shared/color";
-import type { PetSnapshot } from "./shared/ipc";
+import type { PetSnapshot, SettingsSnapshot, SettingsUpdate, DisplayOption } from "./shared/ipc";
 import { HUNGRY_AT } from "./shared/pet-stats";
 import { shouldNotifyHunger } from "./shared/notify";
-import { stripBounds } from "./shared/placement";
-import { SKIN_LIST, normalizePack, STYLE_LIST, normalizeStyle, DEFAULT_STYLE } from "./shared/skins";
+import { stripBounds, displayLabel, pickDisplayId } from "./shared/placement";
+import { normalizePack, normalizeStyle, DEFAULT_STYLE } from "./shared/skins";
 
 let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -24,12 +25,16 @@ let petScale = 1;
 const PET_SCALES = [0.85, 1, 1.3, 1.6];
 /** Pack = skin id per pet slot; renderer mirrors it. */
 let pack: string[] = ["cat"];
+/** Display for the pet strip: explicit monitor id, or null = follow primary. */
+let displayId: number | null = null;
 /** Drawing style for the whole pack (ASCII1 classic / ASCII2 blocks). */
 let style: string = DEFAULT_STYLE;
 /** Floating status window (free placement, hideable). Owned by main. */
 let statusWin: BrowserWindow | null = null;
 let showStatus = true;
 let statusPos: { x: number; y: number } | null = null;
+/** Settings window (frameless card, opened from the menu or status ⚙). */
+let settingsWin: BrowserWindow | null = null;
 /** Latest toast line from the strip (mirrored into the status window). */
 let lastMsg = "";
 /** Latest snapshot pushed by the renderer (for the tray tooltip + sampler). */
@@ -56,6 +61,7 @@ interface AppSettings {
   petScale?: number;
   showStatus?: boolean;
   statusPos?: { x?: number; y?: number };
+  displayId?: number | null;
 }
 
 function settingsPath(): string {
@@ -97,6 +103,7 @@ function loadSettings(): void {
   }
   if (s.pack !== undefined) pack = normalizePack(s.pack);
   if (s.style !== undefined) style = normalizeStyle(s.style);
+  if (s.displayId === null || typeof s.displayId === "number") displayId = s.displayId;
 }
 
 function saveSettings(): void {
@@ -104,7 +111,7 @@ function saveSettings(): void {
     fs.mkdirSync(path.dirname(settingsPath()), { recursive: true });
     fs.writeFileSync(
       settingsPath(),
-      JSON.stringify({ onTop, openAtLogin, pack, style, colorMode, notifyHungry, muted, petScale, showStatus, statusPos }),
+      JSON.stringify({ onTop, openAtLogin, pack, style, colorMode, notifyHungry, muted, petScale, showStatus, statusPos, displayId }),
     );
   } catch {
     // Settings are best-effort; the app works without them.
@@ -127,13 +134,50 @@ function assetPath(file: string): string {
   return path.join(__dirname, "..", "assets", file);
 }
 
-// Full-width transparent strip glued to the taskbar edge of the primary
-// display. The window bottom sits flush with the work-area bottom (= the
+// Full-width transparent strip glued to the taskbar edge of the SELECTED
+// display (settings window picks it; null follows the primary display).
+// The window bottom sits flush with the work-area bottom (= the
 // taskbar's top edge), so the pet floor is exactly on it and every jump
 // starts from it; edge detection keeps it correct for top/side taskbars too.
+function selectedDisplay(): Display {
+  const all = screen.getAllDisplays();
+  return all.find((d) => d.id === displayId) ?? screen.getPrimaryDisplay();
+}
+
+/** Rows for the monitor picker in the settings window. */
+function displayList(): DisplayOption[] {
+  const primaryId = screen.getPrimaryDisplay().id;
+  return screen.getAllDisplays().map((d, i) => ({
+    id: d.id,
+    label: displayLabel(i, d.bounds.width, d.bounds.height, d.id === primaryId),
+    primary: d.id === primaryId,
+    width: d.bounds.width,
+    height: d.bounds.height,
+  }));
+}
+
+function broadcastDisplays(): void {
+  if (settingsWin && !settingsWin.isDestroyed()) {
+    settingsWin.webContents.send("displays-updated", displayList());
+  }
+}
+
+/** Drop a stored id that no longer exists (unplugged monitor) -> follow primary. */
+function pruneDisplay(): void {
+  const resolved = pickDisplayId(
+    screen.getAllDisplays().map((d) => d.id),
+    displayId,
+  );
+  if (resolved !== displayId) {
+    displayId = resolved;
+    saveSettings();
+    broadcastSettings();
+  }
+}
+
 function stripRect(): { x: number; y: number; width: number; height: number } {
-  const primary = screen.getPrimaryDisplay();
-  return stripBounds(primary.bounds, primary.workArea, PET_H);
+  const d = selectedDisplay();
+  return stripBounds(d.bounds, d.workArea, PET_H);
 }
 
 function applyAlwaysOnTop(): void {
@@ -146,6 +190,7 @@ function setColorMode(on: boolean): void {
   colorMode = on;
   saveSettings();
   refreshTrayMenu();
+  broadcastSettings();
   if (on) {
     void sampleBackdrop();
     startSampler();
@@ -178,14 +223,15 @@ async function sampleBackdrop(): Promise<void> {
       types: ["screen"],
       thumbnailSize: { width: THUMB_W, height: THUMB_H },
     });
-    const primaryId = String(screen.getPrimaryDisplay().id);
-    const src = sources.find((s) => s.display_id === primaryId) ?? sources[0];
+    const sel = selectedDisplay();
+    const selId = String(sel.id);
+    const src = sources.find((s) => s.display_id === selId) ?? sources[0];
     if (!src) return;
     const thumb = src.thumbnail;
     const { width: tw, height: th } = thumb.getSize();
     if (tw === 0 || th === 0) return;
     const bitmap = thumb.toBitmap(); // BGRA
-    const bounds = screen.getPrimaryDisplay().bounds;
+    const bounds = sel.bounds;
     const wb = win.getBounds();
     const inks: CellInk[] = [];
     lastStats.forEach((s, slot) => {
@@ -263,6 +309,7 @@ function setPack(skins: string[]): void {
   pack = normalizePack(skins);
   saveSettings();
   refreshTrayMenu();
+  broadcastSettings();
   if (win && !win.isDestroyed()) win.webContents.send("set-pack", pack);
 }
 
@@ -270,6 +317,7 @@ function setStyle(next: string): void {
   style = normalizeStyle(next);
   saveSettings();
   refreshTrayMenu();
+  broadcastSettings();
   if (win && !win.isDestroyed()) win.webContents.send("set-style", style);
 }
 
@@ -277,6 +325,7 @@ function setMuted(m: boolean): void {
   muted = m;
   saveSettings();
   refreshTrayMenu();
+  broadcastSettings();
   if (win && !win.isDestroyed()) win.webContents.send("set-muted", muted);
 }
 
@@ -285,7 +334,91 @@ function setPetScale(scale: number): void {
   petScale = scale;
   saveSettings();
   refreshTrayMenu();
+  broadcastSettings();
   if (win && !win.isDestroyed()) win.webContents.send("set-scale", petScale);
+}
+
+/** Pause toggle shared by the tray menu and the settings window. */
+function setPaused(v: boolean): void {
+  paused = v;
+  refreshTrayMenu();
+  broadcastSettings();
+  if (win && !win.isDestroyed()) win.webContents.send("set-paused", paused);
+}
+
+/** Current settings as a snapshot for the settings window. */
+function settingsSnapshot(): SettingsSnapshot {
+  return {
+    pack: [...pack],
+    style,
+    paused,
+    onTop,
+    showStatus,
+    colorMode,
+    notifyHungry,
+    muted,
+    petScale,
+    openAtLogin,
+    displayId,
+  };
+}
+
+/** Push the snapshot into the open settings window (no-op when closed). */
+function broadcastSettings(): void {
+  if (settingsWin && !settingsWin.isDestroyed()) {
+    settingsWin.webContents.send("settings-updated", settingsSnapshot());
+  }
+}
+
+/** Apply a partial update from the settings window (each field validated). */
+function applySettings(update: SettingsUpdate): void {
+  if (!update || typeof update !== "object") return;
+  if (update.pack !== undefined) setPack(update.pack);
+  if (update.style !== undefined) setStyle(update.style);
+  if (typeof update.paused === "boolean") setPaused(update.paused);
+  if (typeof update.onTop === "boolean" && update.onTop !== onTop) {
+    onTop = update.onTop;
+    saveSettings();
+    applyAlwaysOnTop();
+    refreshTrayMenu();
+    broadcastSettings();
+  }
+  if (typeof update.showStatus === "boolean" && update.showStatus !== showStatus) {
+    setShowStatus(update.showStatus);
+  }
+  if (typeof update.colorMode === "boolean" && update.colorMode !== colorMode) {
+    setColorMode(update.colorMode);
+  }
+  if (typeof update.notifyHungry === "boolean" && update.notifyHungry !== notifyHungry) {
+    notifyHungry = update.notifyHungry;
+    saveSettings();
+    refreshTrayMenu();
+    broadcastSettings();
+  }
+  if (typeof update.muted === "boolean" && update.muted !== muted) setMuted(update.muted);
+  if (typeof update.petScale === "number") setPetScale(update.petScale);
+  if (typeof update.openAtLogin === "boolean" && update.openAtLogin !== openAtLogin) {
+    openAtLogin = update.openAtLogin;
+    saveSettings();
+    applyOpenAtLogin();
+    refreshTrayMenu();
+    broadcastSettings();
+  }
+  if (update.displayId !== undefined && update.displayId !== displayId) {
+    const resolved = pickDisplayId(
+      screen.getAllDisplays().map((d) => d.id),
+      update.displayId,
+    );
+    // Unknown ids (e.g. unplugged since the form was opened) fall back to primary.
+    if (resolved === null || update.displayId === null || resolved === update.displayId) {
+      displayId = resolved;
+      saveSettings();
+      placeWindow(true);
+      refreshTrayMenu();
+      broadcastSettings();
+      broadcastDisplays();
+    }
+  }
 }
 
 function sendToRenderer(channel: "pet-action" | "pet-feed" | "pet-clean-poop"): void {
@@ -329,121 +462,19 @@ function checkForUpdatesNow(): void {
   }
 }
 
-/** Single menu template for the pet context menu and the tray icon. */
+/** Context/tray menu: actions + pause + settings entry (the rest lives in the settings window). */
 function menuTemplate(): MenuItemConstructorOptions[] {
   return [
     { label: "Погладить", click: () => sendToRenderer("pet-action") },
     { label: "Покормить", click: () => sendToRenderer("pet-feed") },
     {
-      label: "Питомец",
-      submenu: SKIN_LIST.map(
-        (s): MenuItemConstructorOptions => ({
-          label: s.name,
-          type: "radio",
-          checked: pack[0] === s.id,
-          click: () => setPack([s.id, ...pack.slice(1)]),
-        }),
-      ),
-    },
-    {
-      label: "Второй питомец",
-      submenu: [
-        {
-          label: "Нет",
-          type: "radio",
-          checked: pack.length < 2,
-          click: () => setPack([pack[0]]),
-        } as MenuItemConstructorOptions,
-        ...SKIN_LIST.map(
-          (s): MenuItemConstructorOptions => ({
-            label: s.name,
-            type: "radio",
-            checked: pack[1] === s.id,
-            click: () => setPack([pack[0], s.id]),
-          }),
-        ),
-      ],
-    },
-    {
-      label: "Стиль",
-      submenu: STYLE_LIST.map(
-        (s): MenuItemConstructorOptions => ({
-          label: s.name,
-          type: "radio",
-          checked: style === s.id,
-          click: () => setStyle(s.id),
-        }),
-      ),
-    },
-    { type: "separator" },
-    {
       label: "Пауза",
       type: "checkbox",
       checked: paused,
-      click: (item) => {
-        paused = item.checked;
-        if (win && !win.isDestroyed()) win.webContents.send("set-paused", paused);
-      },
+      click: (item) => setPaused(item.checked),
     },
-    {
-      label: "Поверх всех окон",
-      type: "checkbox",
-      checked: onTop,
-      click: (item) => {
-        onTop = item.checked;
-        saveSettings();
-        applyAlwaysOnTop();
-      },
-    },
-    {
-      label: "Окно статуса",
-      type: "checkbox",
-      checked: showStatus,
-      click: (item) => setShowStatus(item.checked),
-    },
-    {
-      label: "Авто-инверсия",
-      type: "checkbox",
-      checked: colorMode,
-      click: (item) => setColorMode(item.checked),
-    },
-    {
-      label: "Уведомления о голоде",
-      type: "checkbox",
-      checked: notifyHungry,
-      click: (item) => {
-        notifyHungry = item.checked;
-        saveSettings();
-        refreshTrayMenu();
-      },
-    },
-    {
-      label: "Звук",
-      type: "checkbox",
-      checked: !muted,
-      click: (item) => setMuted(!item.checked),
-    },
-    {
-      label: "Размер питомца",
-      submenu: PET_SCALES.map(
-        (s): MenuItemConstructorOptions => ({
-          label: s === 1 ? "Обычный" : `${Math.round(s * 100)}%`,
-          type: "radio",
-          checked: petScale === s,
-          click: () => setPetScale(s),
-        }),
-      ),
-    },
-    {
-      label: "Запускать с Windows",
-      type: "checkbox",
-      checked: openAtLogin,
-      click: (item) => {
-        openAtLogin = item.checked;
-        saveSettings();
-        applyOpenAtLogin();
-      },
-    },
+    { type: "separator" },
+    { label: "Настройки…", click: () => openSettings() },
     { type: "separator" },
     { label: "Проверить обновления", click: () => checkForUpdatesNow() },
     { label: "Выход", click: () => app.quit() },
@@ -582,18 +613,18 @@ function placeWindow(startled: boolean): void {
 const STATUS_W = 300;
 const STATUS_H = 260;
 
-/** First-launch spot: bottom-right, just above the pet strip. */
+/** First-launch spot: bottom-right, just above the pet strip (selected display). */
 function defaultStatusPos(): { x: number; y: number } {
-  const wa = screen.getPrimaryDisplay().workArea;
+  const wa = selectedDisplay().workArea;
   return {
     x: Math.round(wa.x + wa.width - STATUS_W - 12),
     y: Math.round(wa.y + wa.height - STATUS_H - PET_H - 24),
   };
 }
 
-/** Clamp into the primary work area (survives monitor changes); keep a grab handle visible. */
+/** Clamp into the selected display's work area (survives monitor changes); keep a grab handle visible. */
 function clampStatusPos(p: { x: number; y: number }): { x: number; y: number } {
-  const wa = screen.getPrimaryDisplay().workArea;
+  const wa = selectedDisplay().workArea;
   return {
     x: Math.min(Math.max(p.x, wa.x - STATUS_W + 80), wa.x + wa.width - 80),
     y: Math.min(Math.max(p.y, wa.y), wa.y + wa.height - 40),
@@ -653,11 +684,85 @@ function setShowStatus(v: boolean): void {
   showStatus = v;
   saveSettings();
   refreshTrayMenu();
+  broadcastSettings();
   if (v) {
     if (!statusWin || statusWin.isDestroyed()) createStatusWindow();
     else statusWin.show();
   } else if (statusWin && !statusWin.isDestroyed()) {
     statusWin.hide();
+  }
+}
+
+const SETTINGS_W = 360;
+const SETTINGS_H = 600;
+
+/** Settings window: frameless card, centered on the primary work area.
+ *  Created hidden — settings.ts reports the real card height and main
+ *  shrink-wraps the window before showing it (no transparent dead zone). */
+function createSettingsWindow(): void {
+  const wa = screen.getPrimaryDisplay().workArea;
+  settingsWin = new BrowserWindow({
+    x: Math.round(wa.x + (wa.width - SETTINGS_W) / 2),
+    y: Math.round(wa.y + (wa.height - SETTINGS_H) / 2),
+    width: SETTINGS_W,
+    height: SETTINGS_H,
+    show: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    frame: false,
+    resizable: false,
+    movable: true,
+    focusable: true,
+    skipTaskbar: true,
+    hasShadow: false,
+    icon: iconPath(),
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  settingsWin.setAlwaysOnTop(true, "screen-saver");
+  settingsWin.setMenu(null);
+  void settingsWin.loadFile(path.join(__dirname, "renderer", "settings.html"));
+  settingsWin.webContents.on("did-finish-load", () => {
+    if (!settingsWin || settingsWin.isDestroyed()) return;
+    settingsWin.webContents.send("settings-updated", settingsSnapshot());
+    // Fallback: never leave the window invisible if the resize report is lost.
+    setTimeout(() => {
+      if (settingsWin && !settingsWin.isDestroyed() && !settingsWin.isVisible()) {
+        settingsWin.show();
+      }
+    }, 800);
+  });
+  settingsWin.on("closed", () => {
+    settingsWin = null;
+  });
+}
+
+/** Shrink-wrap the settings window to the reported card height. */
+function fitSettingsWindow(cardH: number): void {
+  if (!settingsWin || settingsWin.isDestroyed()) return;
+  if (typeof cardH !== "number" || !isFinite(cardH)) return;
+  const wa = screen.getPrimaryDisplay().workArea;
+  const h = Math.min(Math.max(Math.round(cardH), 200), Math.max(200, wa.height - 40));
+  settingsWin.setContentSize(SETTINGS_W, h);
+  // Keep the whole window on screen after shrinking.
+  const [x, y] = settingsWin.getPosition();
+  const bottom = y + h;
+  const maxBottom = wa.y + wa.height - 8;
+  if (bottom > maxBottom) settingsWin.setPosition(x, Math.max(wa.y, maxBottom - h));
+  if (!settingsWin.isVisible()) settingsWin.show();
+}
+
+/** Show the settings window (single instance, refreshed on every open). */
+function openSettings(): void {
+  if (settingsWin && !settingsWin.isDestroyed()) {
+    settingsWin.show();
+    settingsWin.focus();
+    settingsWin.webContents.send("settings-updated", settingsSnapshot());
+  } else {
+    createSettingsWindow();
   }
 }
 
@@ -713,6 +818,17 @@ void app.whenReady().then(() => {
   ipcMain.on("status-pat", () => sendToRenderer("pet-action"));
   ipcMain.on("status-feed", () => sendToRenderer("pet-feed"));
   ipcMain.on("status-clean-poop", () => sendToRenderer("pet-clean-poop"));
+  // Settings window (opened from the menu or the status ⚙ button).
+  ipcMain.on("open-settings", () => openSettings());
+  ipcMain.on("settings-hide", () => {
+    if (settingsWin && !settingsWin.isDestroyed()) settingsWin.hide();
+  });
+  ipcMain.handle("get-settings", () => settingsSnapshot());
+  ipcMain.on("set-settings", (_event, update: SettingsUpdate) => applySettings(update));
+  ipcMain.on("settings-resize", (_event, height: unknown) => {
+    if (typeof height === "number") fitSettingsWindow(height);
+  });
+  ipcMain.on("check-for-updates", () => checkForUpdatesNow());
 
   // Pet lives on the primary display; re-hug the taskbar edge whenever
   // displays or their metrics change (resolution, scale, taskbar move).
@@ -743,6 +859,8 @@ app.on("before-quit", () => {
   stopSampler();
   if (statusWin && !statusWin.isDestroyed()) statusWin.destroy();
   statusWin = null;
+  if (settingsWin && !settingsWin.isDestroyed()) settingsWin.destroy();
+  settingsWin = null;
   if (tray && !tray.isDestroyed()) tray.destroy();
   tray = null;
 });

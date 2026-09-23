@@ -97,3 +97,6 @@ document.getElementById("feed")?.addEventListener("click", () => {
 document.getElementById("clean")?.addEventListener("click", () => {
   window.petAPI?.cleanAllPoop();
 });
+document.getElementById("gear")?.addEventListener("click", () => {
+  window.petAPI?.openSettings();
+});

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    overflow: hidden;
+    user-select: none;
+  }
+  #card {
+    margin: 0;
+    background: rgba(18, 18, 26, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 10px;
+    font-family: Consolas, monospace;
+    color: #eee;
+    padding: 0 0 10px 0;
+  }
+  #head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 6px 6px 12px;
+    /* Frameless window: the header is the drag handle. */
+    -webkit-app-region: drag;
+  }
+  #title {
+    font-size: 12px;
+    color: #9ad7ff;
+    letter-spacing: 0.5px;
+  }
+  #close {
+    -webkit-app-region: no-drag;
+    border: 0;
+    background: transparent;
+    color: #888;
+    font-size: 13px;
+    line-height: 1;
+    padding: 4px 8px;
+    cursor: pointer;
+    border-radius: 6px;
+  }
+  #close:hover {
+    color: #fff;
+    background: rgba(255, 122, 122, 0.35);
+  }
+  .section {
+    padding: 2px 12px 0 12px;
+  }
+  .stitle {
+    font-size: 11px;
+    color: #9ad7ff;
+    margin: 8px 0 4px 0;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 5px 0;
+    font-size: 12px;
+    color: #ddd;
+  }
+  select {
+    -webkit-app-region: no-drag;
+    background: rgba(255, 255, 255, 0.1);
+    color: #eee;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 6px;
+    font-family: Consolas, monospace;
+    font-size: 12px;
+    padding: 3px 6px;
+    max-width: 170px;
+  }
+  select option {
+    background: #22222c;
+  }
+  .scales {
+    display: flex;
+    gap: 4px;
+  }
+  .scales label {
+    -webkit-app-region: no-drag;
+    font-size: 11px;
+    color: #aaa;
+    padding: 3px 7px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .scales input {
+    display: none;
+  }
+  .scales label.on {
+    color: #ffd97a;
+    border-color: rgba(255, 217, 122, 0.6);
+  }
+  .check {
+    -webkit-app-region: no-drag;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #ddd;
+    margin: 7px 0;
+    cursor: pointer;
+  }
+  .check input {
+    accent-color: #9ad7ff;
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    cursor: pointer;
+  }
+  #foot {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px 0 12px;
+  }
+  #updates {
+    -webkit-app-region: no-drag;
+    flex: 1;
+    background: rgba(154, 215, 255, 0.12);
+    color: #9ad7ff;
+    border: 1px solid rgba(154, 215, 255, 0.3);
+    border-radius: 6px;
+    font-family: Consolas, monospace;
+    font-size: 12px;
+    padding: 6px;
+    cursor: pointer;
+  }
+  #updates:hover {
+    background: rgba(154, 215, 255, 0.22);
+  }
+</style>
+</head>
+<body>
+<div id="card">
+  <div id="head"><span id="title">Настройки</span><span><button id="close" title="Закрыть">✕</button></span></div>
+  <div class="section">
+    <div class="stitle">Питомцы</div>
+    <div class="row"><span>Питомец</span><select id="pet0"></select></div>
+    <div class="row"><span>Второй питомец</span><select id="pet1"></select></div>
+    <div class="stitle">Оформление</div>
+    <div class="row"><span>Стиль</span><select id="style"></select></div>
+    <div class="row"><span>Размер</span><span class="scales" id="scales"></span></div>
+    <div class="stitle">Поведение</div>
+    <label class="check"><input type="checkbox" id="c-paused" />Пауза</label>
+    <label class="check"><input type="checkbox" id="c-ontop" />Поверх всех окон</label>
+    <label class="check"><input type="checkbox" id="c-status" />Окно статуса</label>
+    <label class="check"><input type="checkbox" id="c-color" />Авто-инверсия</label>
+    <label class="check"><input type="checkbox" id="c-notify" />Уведомления о голоде</label>
+    <label class="check"><input type="checkbox" id="c-sound" />Звук</label>
+    <label class="check"><input type="checkbox" id="c-login" />Запускать с Windows</label>
+  </div>
+  <div id="foot"><button id="updates">Проверить обновления</button></div>
+</div>
+<script src="./settings.js"></script>
+</body>
+</html>

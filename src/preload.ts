@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { CellInk } from "./shared/color";
-import type { PetSnapshot } from "./shared/ipc";
+import type { PetSnapshot, SettingsSnapshot, SettingsUpdate } from "./shared/ipc";
 
 contextBridge.exposeInMainWorld("petAPI", {
   setClickable: (clickable: boolean): void => {
@@ -80,5 +80,26 @@ contextBridge.exposeInMainWorld("petAPI", {
   },
   cleanAllPoop: (): void => {
     ipcRenderer.send("status-clean-poop");
+  },
+  openSettings: (): void => {
+    ipcRenderer.send("open-settings");
+  },
+  getSettings: (): Promise<SettingsSnapshot> => {
+    return ipcRenderer.invoke("get-settings");
+  },
+  setSettings: (update: SettingsUpdate): void => {
+    ipcRenderer.send("set-settings", update);
+  },
+  onSettingsUpdate: (cb: (snapshot: SettingsSnapshot) => void): void => {
+    ipcRenderer.on("settings-updated", (_event, snapshot: SettingsSnapshot) => cb(snapshot));
+  },
+  closeSettings: (): void => {
+    ipcRenderer.send("settings-hide");
+  },
+  checkForUpdates: (): void => {
+    ipcRenderer.send("check-for-updates");
+  },
+  reportSettingsSize: (height: number): void => {
+    ipcRenderer.send("settings-resize", height);
   },
 });

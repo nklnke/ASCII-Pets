@@ -32,7 +32,7 @@
     color: #9ad7ff;
     letter-spacing: 0.5px;
   }
-  #hide, #pat, #feed, #clean {
+  #hide, #pat, #feed, #clean, #gear {
     -webkit-app-region: no-drag;
     border: 0;
     background: transparent;
@@ -42,6 +42,10 @@
     padding: 4px 8px;
     cursor: pointer;
     border-radius: 6px;
+  }
+  #gear:hover {
+    color: #fff;
+    background: rgba(154, 215, 255, 0.25);
   }
   #hide:hover {
     color: #fff;
@@ -125,7 +129,7 @@
 </head>
 <body>
 <div id="card">
-  <div id="head"><span id="title">ASCII Pets</span><span><button id="pat" title="Погладить всех">♥</button><button id="feed" title="Покормить всех">🍖</button><button id="clean" title="Убрать все какашки">💩</button><button id="hide" title="Скрыть окно">✕</button></span></div>
+  <div id="head"><span id="title">ASCII Pets</span><span><button id="pat" title="Погладить всех">♥</button><button id="feed" title="Покормить всех">🍖</button><button id="clean" title="Убрать все какашки">💩</button><button id="gear" title="Настройки">⚙</button><button id="hide" title="Скрыть окно">✕</button></span></div>
   <div id="pets"></div>
   <div id="msg"></div>
 </div>

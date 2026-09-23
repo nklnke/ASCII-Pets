@@ -3,7 +3,7 @@
 // so the two global Window declarations never diverge.
 
 import type { CellInk } from "../shared/color";
-import type { PetSnapshot } from "../shared/ipc";
+import type { PetSnapshot, SettingsSnapshot, SettingsUpdate } from "../shared/ipc";
 
 export interface PetApi {
   setClickable: (clickable: boolean) => void;
@@ -36,6 +36,15 @@ export interface PetApi {
   patAll: () => void;
   feedAll: () => void;
   cleanAllPoop: () => void;
+  /** Settings window: open it, read/apply settings, live sync, close, updates. */
+  openSettings: () => void;
+  getSettings: () => Promise<SettingsSnapshot>;
+  setSettings: (update: SettingsUpdate) => void;
+  onSettingsUpdate: (cb: (snapshot: SettingsSnapshot) => void) => void;
+  closeSettings: () => void;
+  checkForUpdates: () => void;
+  /** Settings window: report the card height so main can shrink-wrap the window. */
+  reportSettingsSize: (height: number) => void;
 }
 
 declare global {

@@ -1,7 +1,6 @@
 // Main <-> renderer contract (types only, no Electron/DOM).
 // Single source of truth: main validates it, preload forwards it,
 // renderer sends it. (CellInk lives in shared/color.ts next to its helpers.)
-
 export interface PetSnapshot {
   label: string;
   hunger: number;
@@ -21,3 +20,31 @@ export interface PetSnapshot {
   cols: number;
   rows: number;
 }
+
+/** Full app settings snapshot (owned by main, shown in the settings window). */
+export interface SettingsSnapshot {
+  pack: string[];
+  style: string;
+  paused: boolean;
+  onTop: boolean;
+  showStatus: boolean;
+  colorMode: boolean;
+  notifyHungry: boolean;
+  muted: boolean;
+  petScale: number;
+  openAtLogin: boolean;
+  /** Selected monitor id, or null = follow the primary display. */
+  displayId: number | null;
+}
+
+/** One row of the monitor picker (dynamic — displays come and go). */
+export interface DisplayOption {
+  id: number;
+  label: string;
+  primary: boolean;
+  width: number;
+  height: number;
+}
+
+/** Partial update sent by the settings window (main validates each field). */
+export type SettingsUpdate = Partial<SettingsSnapshot>;
