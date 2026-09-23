@@ -1,5 +1,6 @@
 // WebAudio synth for pet sounds — no assets, no Node, no DOM except AudioContext.
 // Each skin keeps its voice: cat purrs, dog barks, frog croaks.
+import { SONG_BEAT_MS, songFor, voiceFor } from "../shared/songs";
 // Event SFX (jump/step/clean/startle/...) are synthesized too; all of them
 // respect the global mute flag owned by main (tray menu "Звук").
 
@@ -244,6 +245,20 @@ export function playCurious(): void {
   if (!gate("curious", 2500)) return;
   tone(700, 60, "triangle", 0, 0.06);
   tone(950, 70, "triangle", 80, 0.06);
+}
+
+/** A pet song: the skin's melody in the skin's own voice. */
+export function playSong(skinId: string, index: number): void {
+  if (muted) return;
+  const song = songFor(skinId, index);
+  const voice = voiceFor(skinId);
+  let t = 0;
+  for (const [semi, beats] of song.notes) {
+    const freq = 440 * Math.pow(2, semi / 12) * voice.octave;
+    const dur = Math.max(60, beats * SONG_BEAT_MS);
+    tone(freq, dur, voice.wave, t, voice.gain);
+    t += dur + voice.gapMs;
+  }
 }
 
 /** Pair-interaction jingle (the voice itself is played by the caller). */

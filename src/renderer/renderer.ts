@@ -17,6 +17,7 @@ import {
 import { CellInk, frameCells } from "../shared/color";
 import type { PetSnapshot } from "../shared/ipc";
 import { normalizePack, normalizeStyle, skinMoves, skinName, skinSound, skinSymmetric, styleName, DEFAULT_STYLE } from "../shared/skins";
+import { songDurationMs, songFor, songsFor } from "../shared/songs";
 import { SocialKind, TrioKind, applySocial, shouldSocialize, shouldSocializeTrio, socialDurationMs } from "../shared/social";
 import {
   Gait,
@@ -26,7 +27,7 @@ import {
   temperamentForSlot,
 } from "../shared/temperament";
 import { clearPoop, loadPoop, loadStats, savePoop, saveStats, startAutosave } from "./pet-store";
-import { playAnnoyed, playBoing, playClean, playCurious, playDrop, playEatSound, playGreet, playHungry, playJump, playPetSound, playPoopSound, playSniff, playSnore, playSocial, playStartle, playStep, playWake, setMuted } from "./sound";
+import { playAnnoyed, playBoing, playClean, playCurious, playDrop, playEatSound, playGreet, playHungry, playJump, playPetSound, playPoopSound, playSniff, playSnore, playSocial, playSong, playStartle, playStep, playWake, setMuted } from "./sound";
 import "./pet-api";
 
 const stageEl = document.getElementById("stage") as HTMLDivElement;
@@ -69,6 +70,12 @@ const CALL_MSG_MS = 4000;
 /** Poop piles per pet + horizontal gap so two piles never fully overlap. */
 const MAX_POOPS_PER_PET = 2;
 const POOP_GAP = 70;
+/** Spontaneous songs: first attempt ~3–6 min after launch, then rolling. */
+const SONG_MIN_MS = 180_000;
+const SONG_WINDOW_MS = 180_000;
+/** Floating notes: spawn rate + live cap per pet. */
+const NOTE_EVERY_MS = 320;
+const MAX_NOTES = 6;
 
 /** One floor-anchored poop pile (DOM node + stink waves + position). */
 interface PoopPile {
@@ -199,6 +206,12 @@ class Pet {
   nextHopAt = 0;
   croakUntil = 0;
   nextCroak = 0;
+  // Song state: next attempt timestamp, singing window, melody, note pacing.
+  nextSongAt = 0;
+  singingUntil = 0;
+  songIdx = 0;
+  songNextNote = 0;
+  liveNotes = 0;
   // Per-cell inversion: last ink grid from main + live span map.
   ink: CellInk | null = null;
   /** Painted flag + last painted values (incremental paintInk skips equals). */
@@ -228,6 +241,8 @@ class Pet {
     this.decideUntil = Date.now() + this.temp.decisionMinMs;
     this.nextHopAt = Date.now() + 500 + Math.random() * 1000;
     this.nextCroak = Date.now() + 8000 + Math.random() * 12000;
+    // Stagger debut songs so the pack doesn't choir at once.
+    this.nextSongAt = Date.now() + SONG_MIN_MS + slot * 45_000 + Math.random() * 120_000;
     this.el = document.createElement("pre");
     this.el.className = "pet";
     this.el.classList.toggle("flat", style === "ascii3");
@@ -708,6 +723,34 @@ class Pet {
       this.setFrame(tick % 2 === 0 ? f.eat : f.happy[0]);
       return;
     }
+    // Spontaneous songs (rare): roll the next attempt, start if idle.
+    if (now >= this.nextSongAt) {
+      this.nextSongAt = now + SONG_MIN_MS + Math.random() * SONG_WINDOW_MS;
+      if (
+        !paused &&
+        !this.sleeping() &&
+        !this.sniffing(now) &&
+        !this.jumping(now) &&
+        now >= this.eatUntil &&
+        !socialActive(now) &&
+        songsFor(this.skinId).length > 0
+      ) {
+        this.songIdx = Math.floor(Math.random() * songsFor(this.skinId).length);
+        this.singingUntil = now + songDurationMs(this.skinId, this.songIdx);
+        this.songNextNote = now;
+        showMsg(`${this.label()} поёт: ${songFor(this.skinId, this.songIdx).name}!`);
+        playSong(this.skinId, this.songIdx);
+      }
+    }
+    // Singing: happy bounce + floating notes.
+    if (now < this.singingUntil) {
+      if (now >= this.songNextNote) {
+        this.songNextNote = now + NOTE_EVERY_MS;
+        this.spawnNote();
+      }
+      this.setFrame(f.happy[Math.floor(now / HAPPY_FRAME_MS) % 2]);
+      return;
+    }
     // Happy bounce (slower than the anim tick so the hearts read).
     if (now < this.happyUntil) {
       this.setFrame(f.happy[Math.floor(now / HAPPY_FRAME_MS) % 2]);
@@ -791,6 +834,27 @@ class Pet {
     this.piles.forEach((pile, i) => {
       pile.stink.textContent = POOP_STINK[Math.floor(tick / 4 + this.slot + i) % POOP_STINK.length];
     });
+  }
+
+  /** Spawn one floating music note above the pet (cap keeps the DOM lean). */
+  spawnNote(): void {
+    if (this.liveNotes >= MAX_NOTES) return;
+    const note = document.createElement("span");
+    note.className = "note";
+    note.textContent = "♪♫♩"[Math.floor(Math.random() * 3)] ?? "♪";
+    note.style.left = `${Math.round(this.x + Math.random() * this.width())}px`;
+    note.style.bottom = `${Math.round(this.el.offsetHeight + 10)}px`;
+    stageEl.appendChild(note);
+    this.liveNotes += 1;
+    let gone = false;
+    const done = (): void => {
+      if (gone) return;
+      gone = true;
+      note.remove();
+      this.liveNotes = Math.max(0, this.liveNotes - 1);
+    };
+    note.addEventListener("animationend", done, { once: true });
+    window.setTimeout(done, 1600);
   }
 
   destroy(): void {

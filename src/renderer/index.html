@@ -91,6 +91,25 @@
     text-shadow: none;
     filter: drop-shadow(1px 1px 0 #000);
   }
+  /* Floating music notes: pop above the head, drift up, fade out.
+     pointer-events:none keeps the click-through contract intact. */
+  #stage .note {
+    position: absolute;
+    margin: 0;
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: calc(18px * var(--pet-scale));
+    line-height: 1;
+    color: #ffd97a;
+    text-shadow: 0 0 4px #000, 1px 1px 0 #000;
+    white-space: pre;
+    pointer-events: none;
+    animation: note-float 1.2s ease-out forwards;
+  }
+  @keyframes note-float {
+    from { opacity: 0; transform: translateY(0) scale(0.7); }
+    15% { opacity: 1; }
+    to { opacity: 0; transform: translateY(-56px) scale(1.1); }
+  }
   #stage .pet.flat span {
     text-shadow: none;
   }
