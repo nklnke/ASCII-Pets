@@ -405,19 +405,16 @@ function applySettings(update: SettingsUpdate): void {
     broadcastSettings();
   }
   if (update.displayId !== undefined && update.displayId !== displayId) {
-    const resolved = pickDisplayId(
+    // Unknown ids (e.g. unplugged since the form was opened) fall back to primary.
+    displayId = pickDisplayId(
       screen.getAllDisplays().map((d) => d.id),
       update.displayId,
     );
-    // Unknown ids (e.g. unplugged since the form was opened) fall back to primary.
-    if (resolved === null || update.displayId === null || resolved === update.displayId) {
-      displayId = resolved;
-      saveSettings();
-      placeWindow(true);
-      refreshTrayMenu();
-      broadcastSettings();
-      broadcastDisplays();
-    }
+    saveSettings();
+    placeWindow(true);
+    refreshTrayMenu();
+    broadcastSettings();
+    broadcastDisplays();
   }
 }
 
@@ -728,6 +725,7 @@ function createSettingsWindow(): void {
   settingsWin.webContents.on("did-finish-load", () => {
     if (!settingsWin || settingsWin.isDestroyed()) return;
     settingsWin.webContents.send("settings-updated", settingsSnapshot());
+    settingsWin.webContents.send("displays-updated", displayList());
     // Fallback: never leave the window invisible if the resize report is lost.
     setTimeout(() => {
       if (settingsWin && !settingsWin.isDestroyed() && !settingsWin.isVisible()) {
@@ -761,6 +759,7 @@ function openSettings(): void {
     settingsWin.show();
     settingsWin.focus();
     settingsWin.webContents.send("settings-updated", settingsSnapshot());
+    settingsWin.webContents.send("displays-updated", displayList());
   } else {
     createSettingsWindow();
   }
@@ -824,14 +823,17 @@ void app.whenReady().then(() => {
     if (settingsWin && !settingsWin.isDestroyed()) settingsWin.hide();
   });
   ipcMain.handle("get-settings", () => settingsSnapshot());
+  ipcMain.handle("get-displays", () => displayList());
   ipcMain.on("set-settings", (_event, update: SettingsUpdate) => applySettings(update));
   ipcMain.on("settings-resize", (_event, height: unknown) => {
     if (typeof height === "number") fitSettingsWindow(height);
   });
   ipcMain.on("check-for-updates", () => checkForUpdatesNow());
 
-  // Pet lives on the primary display; re-hug the taskbar edge whenever
-  // displays or their metrics change (resolution, scale, taskbar move).
+  // Pet lives on the selected display; re-hug the taskbar edge whenever
+  // displays or their metrics change (resolution, scale, taskbar move,
+  // monitor plugged/unplugged). A stored monitor that is gone falls back
+  // to primary and the picker list refreshes.
   // The world shifting under its feet startles the pet a little.
   // display-metrics-changed fires in bursts — regroup so it startles once.
   let metricsTimer: NodeJS.Timeout | null = null;
@@ -839,7 +841,9 @@ void app.whenReady().then(() => {
     if (metricsTimer) clearTimeout(metricsTimer);
     metricsTimer = setTimeout(() => {
       metricsTimer = null;
+      pruneDisplay();
       placeWindow(true);
+      broadcastDisplays();
     }, 500);
   };
   screen.on("display-metrics-changed", onDisplayChanged);

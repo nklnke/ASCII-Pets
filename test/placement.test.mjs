@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { detectTaskbarEdge, stripBounds } from "../dist/shared/placement.js";
+import { detectTaskbarEdge, stripBounds, displayLabel, pickDisplayId } from "../dist/shared/placement.js";
 
 const PET_H = 180;
 
@@ -51,5 +51,17 @@ describe("placement", () => {
     assert.equal(s.x, 1920);
     assert.equal(s.width, 1920);
     assert.equal(s.y, 1040 - PET_H);
+  });
+
+  it("labels monitor picker rows with index, size and primary mark", () => {
+    assert.equal(displayLabel(0, 1920, 1080, true), "Монитор 1 — 1920×1080 (основной)");
+    assert.equal(displayLabel(1, 2560, 1440, false), "Монитор 2 — 2560×1440");
+  });
+
+  it("resolves a stored monitor id, falling back to primary when gone", () => {
+    assert.equal(pickDisplayId([1, 2], 2), 2);
+    assert.equal(pickDisplayId([1, 2], null), null);
+    assert.equal(pickDisplayId([1], 2), null);
+    assert.equal(pickDisplayId([], 2), null);
   });
 });

@@ -9,6 +9,14 @@ export interface Rect {
   height: number;
 }
 
+/** Minimal display description for the pure helpers below. */
+export interface DisplaySpec {
+  id: number;
+  bounds: Rect;
+  workArea: Rect;
+  primary?: boolean;
+}
+
 export type TaskbarEdge = "bottom" | "top" | "left" | "right" | "hidden";
 
 /** Which display edge holds the taskbar, derived from bounds vs workArea. */
@@ -39,4 +47,18 @@ export function stripBounds(bounds: Rect, workArea: Rect, petH: number): Rect {
       ? workArea.y
       : workArea.y + workArea.height - petH;
   return { x: bounds.x, y, width: bounds.width, height: petH };
+}
+
+/** Human label for the monitor picker ("Монитор 1 — 1920×1080 (основной)"). */
+export function displayLabel(index: number, width: number, height: number, primary: boolean): string {
+  return `Монитор ${index + 1} — ${width}×${height}${primary ? " (основной)" : ""}`;
+}
+
+/**
+ * Resolve a stored display id against the currently available ones.
+ * Returns the id when still present, else null (caller falls back to primary).
+ */
+export function pickDisplayId(availableIds: number[], want: number | null): number | null {
+  if (want === null || want === undefined) return null;
+  return availableIds.includes(want) ? want : null;
 }

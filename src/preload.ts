@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { CellInk } from "./shared/color";
-import type { PetSnapshot, SettingsSnapshot, SettingsUpdate } from "./shared/ipc";
+import type { PetSnapshot, SettingsSnapshot, SettingsUpdate, DisplayOption } from "./shared/ipc";
 
 contextBridge.exposeInMainWorld("petAPI", {
   setClickable: (clickable: boolean): void => {
@@ -101,5 +101,11 @@ contextBridge.exposeInMainWorld("petAPI", {
   },
   reportSettingsSize: (height: number): void => {
     ipcRenderer.send("settings-resize", height);
+  },
+  getDisplays: (): Promise<DisplayOption[]> => {
+    return ipcRenderer.invoke("get-displays");
+  },
+  onDisplaysUpdate: (cb: (displays: DisplayOption[]) => void): void => {
+    ipcRenderer.on("displays-updated", (_event, displays: DisplayOption[]) => cb(displays));
   },
 });

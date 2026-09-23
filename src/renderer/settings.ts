@@ -3,7 +3,7 @@
 // getSettings/setSettings and live settings-updated broadcasts.
 
 import { SKIN_LIST, STYLE_LIST } from "../shared/skins";
-import type { SettingsSnapshot } from "../shared/ipc";
+import type { DisplayOption, SettingsSnapshot } from "../shared/ipc";
 import "./pet-api";
 
 const PET_SCALES = [0.85, 1, 1.3, 1.6];
@@ -15,6 +15,7 @@ function scaleLabel(s: number): string {
 const pet0El = document.getElementById("pet0") as HTMLSelectElement;
 const pet1El = document.getElementById("pet1") as HTMLSelectElement;
 const styleEl = document.getElementById("style") as HTMLSelectElement;
+const displayEl = document.getElementById("display") as HTMLSelectElement;
 const scalesEl = document.getElementById("scales") as HTMLSpanElement;
 const cPaused = document.getElementById("c-paused") as HTMLInputElement;
 const cOntop = document.getElementById("c-ontop") as HTMLInputElement;
@@ -63,6 +64,7 @@ function applyToForm(s: SettingsSnapshot): void {
   if (Array.isArray(s.pack) && s.pack[0]) pet0El.value = s.pack[0];
   pet1El.value = Array.isArray(s.pack) && s.pack[1] ? s.pack[1] : "";
   styleEl.value = s.style;
+  applyDisplayId(s.displayId);
   scaleLabels.forEach((label, i) => {
     const input = label.querySelector("input");
     const on = PET_SCALES[i] === s.petScale;
@@ -102,6 +104,32 @@ window.petAPI?.onSettingsUpdate((s) => applyToForm(s));
 void window.petAPI?.getSettings?.().then((s) => {
   applyToForm(s);
   reportSize();
+});
+void window.petAPI?.getDisplays?.().then((d) => applyDisplays(d));
+window.petAPI?.onDisplaysUpdate((d) => applyDisplays(d));
+
+/** Rebuild the monitor picker; "" = follow the primary display. */
+function applyDisplays(displays: DisplayOption[]): void {
+  const prev = displayEl.value;
+  fillSelect(displayEl, [
+    { value: "", label: "Основной (авто)" },
+    ...(Array.isArray(displays) ? displays : []).map((d) => ({ value: String(d.id), label: d.label })),
+  ]);
+  // Keep the selection: fresh snapshot value wins, else the previous choice.
+  const want =
+    current && (current.displayId === null || displays.some((d) => d.id === current?.displayId))
+      ? String(current.displayId ?? "")
+      : prev;
+  displayEl.value = want;
+  applyDisplayId(current?.displayId ?? null);
+}
+
+function applyDisplayId(id: number | null): void {
+  displayEl.value = id === null || id === undefined ? "" : String(id);
+}
+
+displayEl.addEventListener("change", () => {
+  window.petAPI?.setSettings({ displayId: displayEl.value === "" ? null : Number(displayEl.value) });
 });
 
 /** Tell main the real card height so it can shrink-wrap the window. */
