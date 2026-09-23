@@ -8,12 +8,14 @@ export interface SkinMeta {
   name: string;
   moves: Locomotion;
   petSound: string;
+  /** Front-facing sprite: left/right walk frames are identical, no mirroring. */
+  symmetric: boolean;
 }
 
 export const SKIN_LIST: SkinMeta[] = [
-  { id: "cat", name: "Кот", moves: "walk", petSound: "*mur*" },
-  { id: "dog", name: "Пёс", moves: "walk", petSound: "*гав*" },
-  { id: "frog", name: "Лягушка", moves: "hop", petSound: "*ква*" },
+  { id: "cat", name: "Кот", moves: "walk", petSound: "*mur*", symmetric: false },
+  { id: "dog", name: "Пёс", moves: "walk", petSound: "*гав*", symmetric: true },
+  { id: "frog", name: "Лягушка", moves: "hop", petSound: "*ква*", symmetric: true },
 ];
 
 export const DEFAULT_SKIN = "cat";
@@ -37,6 +39,11 @@ export function skinMoves(id: string): Locomotion {
 
 export function skinSound(id: string): string {
   return SKIN_LIST.find((s) => s.id === id)?.petSound ?? "*mur*";
+}
+
+/** Front-facing skins (dog, frog) use one walk set for both directions. */
+export function skinSymmetric(id: string): boolean {
+  return SKIN_LIST.find((s) => s.id === id)?.symmetric ?? false;
 }
 
 export interface StyleMeta {

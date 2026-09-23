@@ -50,6 +50,14 @@
     margin: 0;
     padding: 8px 8px 0;
     cursor: pointer;
+    opacity: 1;
+    /* Opacity only: the wrap carries an inline translateX for positioning,
+       so a class-based transform would fight it. */
+    transition: opacity 300ms linear;
+  }
+  #stage .poop-wrap.poop-enter,
+  #stage .poop-wrap.poop-leaving {
+    opacity: 0;
   }
   #stage .poop {
     margin: 0;
