@@ -19,6 +19,8 @@ export interface PetStats {
 export const HUNGRY_AT = 80;
 export const SLEEPY_AT = 10;
 export const TIRED_AT = 25;
+/** Energy recovered per minute while resting (pause or sleep). */
+export const RESTORE_PER_MIN = 9;
 
 const MIN = 0;
 const MAX = 100;
@@ -34,12 +36,13 @@ export function createInitialStats(now: number): PetStats {
 /**
  * Advance needs by elapsedMin minutes.
  * resting=true while the user paused the pet (it naps and recovers energy).
+ * drain scales the walking drain per skin (endurance); resting ignores it.
  */
-export function tickStats(s: PetStats, elapsedMin: number, resting: boolean, now: number): PetStats {
+export function tickStats(s: PetStats, elapsedMin: number, resting: boolean, now: number, drain = 1): PetStats {
   if (elapsedMin <= 0) return { ...s, updatedAt: now };
   const hunger = s.hunger + elapsedMin * 2;
   const moodDrift = hunger >= 70 ? -elapsedMin * 1.5 : elapsedMin * 0.5;
-  const energy = resting ? s.energy + elapsedMin * 6 : s.energy - elapsedMin * 0.5;
+  const energy = resting ? s.energy + elapsedMin * RESTORE_PER_MIN : s.energy - elapsedMin * 0.5 * drain;
   return {
     ...s,
     hunger: clamp(hunger),
@@ -83,6 +86,13 @@ export function isSleepy(s: PetStats): boolean {
 /** Sleep counts as rest: a sleeping pet recovers energy like a paused one. */
 export function isResting(s: PetStats, paused: boolean): boolean {
   return paused || s.energy <= SLEEPY_AT;
+}
+
+/** Walking energy drain per skin (endurance): dog lasts longest, frog tires fast. */
+export function energyDrainFor(skinId: string): number {
+  if (skinId === "dog") return 0.7;
+  if (skinId === "frog") return 1.4;
+  return 1;
 }
 
 // Poop mechanics (simple variant): after each meal the pet may leave a pile

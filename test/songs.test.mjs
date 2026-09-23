@@ -46,8 +46,8 @@ describe("songs", () => {
   });
 
   it("unknown skins and indexes fall back gracefully", () => {
-    assert.ok(songFor("fish", 0).notes.length > 0);
+    assert.ok(songFor("unknown-skin", 0).notes.length > 0);
     assert.equal(songFor("cat", 99).name, songFor("cat", 99 % songsFor("cat").length).name);
-    assert.deepEqual(voiceFor("fish"), voiceFor("cat"));
+    assert.deepEqual(voiceFor("unknown-skin"), voiceFor("cat"));
   });
 });

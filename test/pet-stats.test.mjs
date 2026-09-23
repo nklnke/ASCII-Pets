@@ -4,9 +4,11 @@ import {
   ANNOY_MOOD_HIT,
   PET_SPAM_LIMIT,
   PET_SPAM_WINDOW_MS,
+  RESTORE_PER_MIN,
   annoyPet,
   cleanPoop,
   createInitialStats,
+  energyDrainFor,
   isPettingSpam,
   rollPoop,
   tickDirty,
@@ -76,6 +78,25 @@ describe("pet-stats", () => {
     const next = tickStats(sleepy, 2, isResting(sleepy, false), 120_000);
     assert.ok(next.energy > sleepy.energy);
     assert.equal(isSleepy(next), false);
+  });
+
+  it("restores energy at the resting rate", () => {
+    assert.ok(RESTORE_PER_MIN > 6);
+    const s = { ...createInitialStats(0), energy: 50 };
+    const next = tickStats(s, 2, true, 120_000);
+    assert.equal(next.energy, 50 + 2 * RESTORE_PER_MIN);
+  });
+
+  it("endurance differs per skin: dog outlasts frog", () => {
+    assert.equal(energyDrainFor("dog"), 0.7);
+    assert.equal(energyDrainFor("cat"), 1);
+    assert.equal(energyDrainFor("frog"), 1.4);
+    assert.equal(energyDrainFor("unknown-skin"), 1);
+    const s = { ...createInitialStats(0), energy: 50 };
+    const dog = tickStats(s, 10, false, 600_000, energyDrainFor("dog"));
+    const frog = tickStats(s, 10, false, 600_000, energyDrainFor("frog"));
+    assert.ok(dog.energy > s.energy - 5 && dog.energy < 50);
+    assert.ok(frog.energy < dog.energy);
   });
 
   it("poop roll is deterministic from injected randomness", () => {

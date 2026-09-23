@@ -5,6 +5,7 @@ import {
   PET_SPAM_WINDOW_MS,
   annoyPet,
   cleanPoop,
+  energyDrainFor,
   feedPet,
   isHungry,
   isPettingSpam,
@@ -757,7 +758,8 @@ class Pet {
 
   tickNeeds(elapsedMin: number): void {
     // Sleep counts as rest: a sleeping pet naps the energy back by itself.
-    this.stats = tickStats(this.stats, elapsedMin, isResting(this.stats, paused), Date.now());
+    // Drain is per-skin (the dog outlasts the frog on the same walk).
+    this.stats = tickStats(this.stats, elapsedMin, isResting(this.stats, paused), Date.now(), energyDrainFor(this.skinId));
     // Each uncleaned pile rots the mood on top of the normal drift.
     for (let i = 0; i < this.piles.length; i++) {
       this.stats = tickDirty(this.stats, elapsedMin, Date.now());
