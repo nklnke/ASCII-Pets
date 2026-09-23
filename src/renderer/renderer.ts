@@ -13,8 +13,8 @@ import {
 } from "../shared/pet-stats";
 import { CellInk, frameCells } from "../shared/color";
 import type { PetSnapshot } from "../shared/ipc";
-import { normalizePack, normalizeStyle, skinMoves, skinName, skinSound, styleName, DEFAULT_STYLE } from "../shared/skins";
-import { SocialKind, applySocial, shouldSocialize } from "../shared/social";
+import { normalizePack, normalizeStyle, skinMoves, skinName, skinSound, skinSymmetric, styleName, DEFAULT_STYLE } from "../shared/skins";
+import { SocialKind, applySocial, shouldSocialize, socialDurationMs } from "../shared/social";
 import {
   Gait,
   TemperamentParams,
@@ -23,7 +23,7 @@ import {
   temperamentForSlot,
 } from "../shared/temperament";
 import { clearPoop, loadPoop, loadStats, savePoop, saveStats, startAutosave } from "./pet-store";
-import { playEatSound, playPetSound, playPoopSound, setMuted } from "./sound";
+import { playClean, playDrop, playEatSound, playGreet, playHungry, playJump, playPetSound, playPoopSound, playSniff, playSnore, playSocial, playStartle, playStep, setMuted } from "./sound";
 import "./pet-api";
 
 const stageEl = document.getElementById("stage") as HTMLDivElement;
@@ -234,9 +234,18 @@ class Pet {
     return -this.jumpHeight * 4 * p * (1 - p);
   }
 
-  startJump(heightScale = 1): void {
+  startJump(heightScale = 1, anchor = true): void {
     this.jumpStart = Date.now();
     this.jumpHeight = this.temp.jumpHeight * heightScale;
+    // Hoppers travel via hopFromX -> hopToX: an external bounce (petting,
+    // socials, startle) must jump in place instead of replaying a stale path
+    // (which teleported the frog across the strip). hopStep opts out because
+    // it sets a real target right before jumping.
+    if (anchor && this.hopper()) {
+      this.hopFromX = this.x;
+      this.hopToX = this.x;
+    }
+    playJump(this.skinId);
   }
 
   /** Fright: turn away from the scare point and hop off. */
@@ -246,11 +255,13 @@ class Pet {
     this.dir = fromX < center ? 1 : -1;
     this.slowUntil = Date.now() + TURN_SLOW_MS;
     this.startJump(0.8);
+    playStartle(this.skinId);
     showMsg(`${this.label()}: испугался!`);
   }
 
   greet(): void {
     this.startJump(1);
+    playGreet(this.skinId);
     showMsg(`${this.label()}: *потягивается* Привет!`);
   }
 
@@ -284,7 +295,9 @@ class Pet {
   bobAmp(now: number): number {
     if (this.hopper() || this.sleeping() || this.sniffing(now)) return 0;
     const gait = this.gait === "sniff" ? "walk" : this.gait;
-    return gait === "scurry" ? 1.6 : gait === "amble" ? 0.9 : 1.2;
+    // Small on purpose: the whole sprite rides this sine at stride frequency,
+    // and 1px+ reads as trembling (worse at scurry pace).
+    return gait === "scurry" ? 0.7 : gait === "amble" ? 0.4 : 0.5;
   }
 
   gridSize(): { cols: number; rows: number } {
@@ -430,6 +443,10 @@ class Pet {
     stageEl.appendChild(wrap);
     this.poopEl = wrap;
     this.stinkEl = stink;
+    // Gentle fade-in (same 300ms curve as the fade-out below).
+    wrap.classList.add("poop-enter");
+    void wrap.offsetWidth;
+    wrap.classList.remove("poop-enter");
     savePoop(this.slot, x);
     if (!quiet) {
       playPoopSound();
@@ -437,18 +454,32 @@ class Pet {
     }
   }
 
-  /** Click on the pile: remove it, cheer the pet up a little. */
+  /** Click on the pile: fade it out, cheer the pet up a little. */
+  // (CSS transition is 300ms — the timer below has a small margin so the
+  // node never pops early.)
+  // Fade-out: stats/sound/message fire on click, the node fades 300ms
+  // and is removed by the timer. destroy() removes it instantly; the timer
+  // then only refreshes stats (guarded by identity check).
   cleanPoopEl(): void {
-    if (!this.poopEl) return;
-    this.poopEl.remove();
-    this.poopEl = null;
-    this.stinkEl = null;
+    const wrap = this.poopEl;
+    if (!wrap || wrap.classList.contains("poop-leaving")) return;
     clearPoop(this.slot);
     this.stats = cleanPoop(this.stats, Date.now());
     saveStats(this.slot, this.stats);
+    playClean();
     showMsg(`${this.label()}: чисто! (+настроение)`);
     window.petAPI?.setClickable(false);
+    wrap.classList.remove("poop-enter");
+    wrap.classList.add("poop-leaving");
     renderStats();
+    window.setTimeout(() => {
+      wrap.remove();
+      if (this.poopEl === wrap) {
+        this.poopEl = null;
+        this.stinkEl = null;
+      }
+      renderStats();
+    }, 320);
   }
 
   tickNeeds(elapsedMin: number): void {
@@ -470,6 +501,7 @@ class Pet {
     if (roll.gait === "sniff") {
       this.sniffUntil = now + Math.min(roll.durationMs, MAX_SNIFF_MS);
       this.nextBlink = now; // sniff with a blink looks alive
+      playSniff();
     }
     if (roll.jump && !this.hopper()) this.startJump(0.7 + Math.random() * 0.6);
     this.decideUntil = now + roll.durationMs;
@@ -500,7 +532,7 @@ class Pet {
     }
     this.hopFromX = this.x;
     this.hopToX = target;
-    this.startJump(1);
+    this.startJump(1, false);
     const [plo, phi] = this.temp.hopPause;
     const pause = plo + Math.random() * (phi - plo);
     this.nextHopAt = Date.now() + JUMP_MS + (tired ? pause * 1.8 : pause);
@@ -568,11 +600,13 @@ class Pet {
     }
     // Sleeping: Z's drift slowly.
     if (this.sleeping()) {
+      playSnore();
       this.setFrame(f.sleep[tick % 4 < 2 ? 0 : 1]);
       return;
     }
     // Hungry shiver.
     if (isHungry(this.stats)) {
+      playHungry();
       this.setFrame(f.hungry[tick % 2]);
       return;
     }
@@ -601,7 +635,9 @@ class Pet {
         return;
       }
     }
-    const frames = this.dir === 1 ? f.walkRight : f.walkLeft;
+    // Symmetric (front-facing) skins share one walk set for both directions:
+    // mirroring flips line padding and jerks the sprite sideways on every turn.
+    const frames = this.dir === 1 || skinSymmetric(this.skinId) ? f.walkRight : f.walkLeft;
     if (this.hopper()) {
       // Sitters rest: no leg-cycling on the ground (leaps use jump frames above).
       this.strideAcc = 0;
@@ -618,10 +654,13 @@ class Pet {
     // so amble/scurry don't share one mechanical 10fps cycle.
     const strideGait = this.gait === "sniff" ? "walk" : this.gait;
     const pxPerFrame = STRIDE_PX[strideGait];
+    let advanced = false;
     while (this.strideAcc >= pxPerFrame) {
       this.strideAcc -= pxPerFrame;
       this.frame = (this.frame + 1) % frames.length;
+      advanced = true;
     }
+    if (advanced) playStep(strideGait, this.skinId);
     this.setFrame(frames[this.frame]);
   }
 
@@ -720,54 +759,301 @@ function maybePushPos(now: number): void {
 /** Last pair-social timestamp; starts "long ago" so the first meeting fires. */
 let lastSocialAt = -1e12;
 
-/** Pair meeting: two close pets play, chase or squabble (mood + hops). */
+/** Running pair scene: checkSocial starts it, socialStep drives the beats. */
+interface SocialState {
+  kind: SocialKind;
+  since: number;
+  until: number;
+  nextBeat: number;
+  beat: number;
+  /** Shared run direction for chase (race runs apart instead). */
+  dir: 1 | -1;
+  whooped: boolean;
+}
+let social: SocialState | null = null;
+
+function socialActive(now: number): boolean {
+  return !!social && now < social.until;
+}
+
+/** Cosmetic variant pick (Math.random is fine here — no logic depends on it). */
+function pickMsg(variants: string[]): string {
+  return variants[Math.floor(Math.random() * variants.length)];
+}
+
+/** Freeze the random brain for the scene length (walkers + hoppers). */
+function lockPet(p: Pet, until: number): void {
+  p.decideUntil = until;
+  p.slowUntil = 0;
+}
+
+/** Hold a walker in place (standing rest frame) without touching hoppers. */
+function holdWalker(p: Pet, until: number): void {
+  if (!p.hopper()) p.sniffUntil = until;
+}
+
+/** Chain another hopper leap from the current spot (no sit pause mid-scene). */
+function sceneHop(p: Pet, mult = 1): void {
+  const [lo, hi] = p.temp.hopLength;
+  const len = (lo + Math.random() * (hi - lo)) * mult;
+  p.hopFromX = p.x;
+  p.hopToX = p.clampX(p.x + p.dir * len);
+  if (Math.abs(p.hopToX - p.x) < 30) {
+    p.dir = p.dir === 1 ? -1 : 1;
+    p.hopToX = p.clampX(p.x + p.dir * len);
+  }
+  p.startJump(1, false);
+  p.nextHopAt = Date.now() + JUMP_MS + 120;
+}
+
+/** Start the choreography for a fresh social event. */
+function startScene(kind: SocialKind, dur: number, now: number): void {
+  const [a, b] = pets;
+  if (!a || !b) return;
+  const until = now + dur;
+  if (kind === "play") {
+    // Face each other, bounce in place.
+    a.dir = a.x < b.x ? 1 : -1;
+    b.dir = b.x < a.x ? 1 : -1;
+    for (const p of [a, b]) {
+      lockPet(p, until);
+      holdWalker(p, until);
+      p.happyUntil = until;
+      if (p.hopper()) p.nextHopAt = until;
+    }
+    a.startJump(0.6);
+    b.startJump(0.6);
+    social = { kind, since: now, until, nextBeat: now + 620, beat: 0, dir: 1, whooped: false };
+    showMsg(`${a.label()} и ${b.label()} ${pickMsg(["играют!", "затеяли возню!", "резвятся вместе!"])}`);
+    playSocial("play", a.skinId);
+    playPetSound(a.skinId);
+  } else if (kind === "chase") {
+    // Both dash off in one direction, scurry-locked.
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    for (const p of [a, b]) {
+      p.dir = dir;
+      p.gait = "scurry";
+      lockPet(p, until);
+      p.happyUntil = until;
+      if (p.hopper()) p.nextHopAt = now;
+      else p.sniffUntil = 0;
+    }
+    a.startJump(0.7);
+    b.startJump(0.7);
+    social = { kind, since: now, until, nextBeat: now + dur / 2, beat: 0, dir, whooped: false };
+    showMsg(`${a.label()} и ${b.label()} — ${pickMsg(["догонялки!", "носятся друг за другом!"])}`);
+    playSocial("chase", b.skinId);
+    playPetSound(b.skinId);
+  } else if (kind === "sniff") {
+    // Nose-to-nose greeting: stand still, sniff + blink.
+    a.dir = a.x < b.x ? 1 : -1;
+    b.dir = b.x < a.x ? 1 : -1;
+    for (const p of [a, b]) {
+      lockPet(p, until);
+      p.speedCur = 0;
+      if (p.hopper()) p.nextHopAt = until;
+      else p.sniffUntil = until;
+      p.nextBlink = now + 400;
+    }
+    social = { kind, since: now, until, nextBeat: now + dur / 2, beat: 0, dir: 1, whooped: false };
+    showMsg(`${a.label()} и ${b.label()} ${pickMsg(["знакомятся нос к носу!", "обнюхиваются!"])}`);
+    playSocial("sniff", a.skinId);
+    playSniff();
+  } else if (kind === "dance") {
+    // Chorus line: side by side, bouncing in rhythm.
+    const dir = a.dir;
+    b.dir = dir;
+    for (const p of [a, b]) {
+      lockPet(p, until);
+      holdWalker(p, until);
+      p.happyUntil = until;
+      if (p.hopper()) p.nextHopAt = until;
+    }
+    a.startJump(0.5);
+    b.startJump(0.5);
+    social = { kind, since: now, until, nextBeat: now + HAPPY_FRAME_MS, beat: 0, dir, whooped: false };
+    showMsg(`${a.label()} и ${b.label()} ${pickMsg(["танцуют!", "устроили пляски!"])}`);
+    playSocial("dance", a.skinId);
+    playPetSound(a.skinId);
+  } else if (kind === "race") {
+    // Sprint apart, each toward its own edge.
+    a.dir = a.x < b.x ? -1 : 1;
+    b.dir = a.dir === 1 ? -1 : 1;
+    for (const p of [a, b]) {
+      p.gait = "scurry";
+      lockPet(p, until);
+      p.happyUntil = until;
+      if (p.hopper()) p.nextHopAt = now;
+      else p.sniffUntil = 0;
+    }
+    a.startJump(0.7);
+    b.startJump(0.7);
+    social = { kind, since: now, until, nextBeat: now + dur / 2, beat: 0, dir: 1, whooped: false };
+    showMsg(`${a.label()} и ${b.label()} — ${pickMsg(["наперегонки!", "соревнуются, кто быстрее!"])}`);
+    playSocial("race", a.skinId);
+  } else {
+    // Squabble: face off, clash, then turn away and walk off.
+    a.dir = a.x < b.x ? 1 : -1;
+    b.dir = b.x < a.x ? 1 : -1;
+    for (const p of [a, b]) {
+      lockPet(p, until);
+      holdWalker(p, until);
+      if (p.hopper()) p.nextHopAt = until;
+    }
+    a.startJump(0.8);
+    b.startJump(0.8);
+    social = { kind, since: now, until, nextBeat: now + 800, beat: 0, dir: 1, whooped: false };
+    showMsg(`${a.label()} и ${b.label()} ${pickMsg(["повздорили!", "поссорились!"])}`);
+    playSocial("squabble", a.skinId);
+  }
+  renderStats();
+}
+
+/** Race finish: whoever got closer to its own edge wins. */
+function finishSocial(now: number): void {
+  const [a, b] = pets;
+  if (social?.kind === "race" && a && b) {
+    const scoreA = a.dir === 1 ? a.x : window.innerWidth - a.x;
+    const scoreB = b.dir === 1 ? b.x : window.innerWidth - b.x;
+    if (Math.abs(scoreA - scoreB) < 40) {
+      showMsg(`${a.label()} и ${b.label()} пришли вровень!`);
+    } else {
+      const winner = scoreA > scoreB ? a : b;
+      showMsg(`${winner.label()} победил в забеге!`);
+      playPetSound(winner.skinId);
+    }
+    renderStats();
+  }
+  social = null;
+  void now;
+}
+
+/** Per-frame scene driver: keeps the choreography alive until `until`. */
+function socialStep(now: number): void {
+  if (!social) return;
+  const [a, b] = pets;
+  if (!a || !b || dragPet || paused || a.sleeping() || b.sleeping()) {
+    social = null;
+    return;
+  }
+  if (now >= social.until) {
+    finishSocial(now);
+    return;
+  }
+  const s = social;
+  if (s.kind === "play") {
+    // Synchronized bouncing, alternating voices.
+    if (now >= s.nextBeat) {
+      s.beat += 1;
+      s.nextBeat = now + 620;
+      a.startJump(0.55);
+      b.startJump(0.55);
+      playPetSound(s.beat % 2 === 0 ? a.skinId : b.skinId);
+    }
+  } else if (s.kind === "dance") {
+    // Rhythm jumps (~350ms waltz); drift back together if parted.
+    if (Math.abs(a.x - b.x) > 180) {
+      const lead = a.x < b.x ? a : b;
+      const trail = lead === a ? b : a;
+      trail.dir = trail.x < lead.x ? 1 : -1;
+    }
+    if (now >= s.nextBeat) {
+      s.beat += 1;
+      s.nextBeat = now + HAPPY_FRAME_MS;
+      a.startJump(0.5);
+      b.startJump(0.5);
+      if (s.beat % 4 === 0) playPetSound(s.beat % 8 === 0 ? a.skinId : b.skinId);
+    }
+  } else if (s.kind === "sniff") {
+    // Second curious sniff halfway through.
+    if (!s.whooped && now >= s.nextBeat) {
+      s.whooped = true;
+      a.nextBlink = now;
+      b.nextBlink = now;
+      playSniff();
+    }
+  } else if (s.kind === "chase") {
+    // Hold the scurry lock; turn together at edges; whoop halfway.
+    for (const p of [a, b]) {
+      p.decideUntil = s.until;
+      if (!p.hopper()) {
+        p.gait = "scurry";
+        p.sniffUntil = 0;
+      }
+    }
+    if (
+      a.x <= EDGE_MARGIN ||
+      b.x <= EDGE_MARGIN ||
+      a.x >= window.innerWidth - a.width() - EDGE_MARGIN ||
+      b.x >= window.innerWidth - b.width() - EDGE_MARGIN
+    ) {
+      const dir = (a.x <= EDGE_MARGIN || b.x <= EDGE_MARGIN ? 1 : -1) as 1 | -1;
+      a.dir = dir;
+      b.dir = dir;
+      a.slowUntil = 0;
+      b.slowUntil = 0;
+    }
+    for (const p of [a, b]) {
+      if (p.hopper() && !p.jumping(now) && now >= p.nextHopAt - 200) sceneHop(p, 1);
+    }
+    if (!s.whooped && now >= s.nextBeat) {
+      s.whooped = true;
+      playPetSound(Math.random() < 0.5 ? a.skinId : b.skinId);
+    }
+  } else if (s.kind === "race") {
+    // Full sprint apart; hoppers chain leaps, walkers hold scurry.
+    for (const p of [a, b]) {
+      p.decideUntil = s.until;
+      if (!p.hopper()) {
+        p.gait = "scurry";
+        p.sniffUntil = 0;
+      } else if (!p.jumping(now) && now >= p.nextHopAt - 200) {
+        sceneHop(p, 1.1);
+      }
+    }
+    if (!s.whooped && now >= s.nextBeat) {
+      s.whooped = true;
+      a.startJump(0.6);
+      b.startJump(0.6);
+    }
+  } else {
+    // Squabble: after the clash, turn away and walk off.
+    if (s.beat === 0 && now >= s.nextBeat) {
+      s.beat = 1;
+      a.dir = a.x < b.x ? -1 : 1;
+      b.dir = b.x < a.x ? -1 : 1;
+      for (const p of [a, b]) {
+        if (!p.hopper()) p.sniffUntil = 0;
+        p.slowUntil = 0;
+      }
+      playSocial("squabble", b.skinId);
+    }
+  }
+}
+
+/** Pair meeting: close pets start a 2–4s scene (mood + energy + choreography). */
 function checkSocial(now: number): void {
   if (paused || pets.length < 2) return;
   const [a, b] = pets;
   if (!a || !b || dragPet) return;
   if (a.sleeping() || b.sleeping()) return;
+  if (socialActive(now)) return;
+  if (social) finishSocial(now);
   const kind: SocialKind | null = shouldSocialize(Math.abs(a.x - b.x), now - lastSocialAt, Math.random());
   if (!kind) return;
   lastSocialAt = now;
+  const dur = socialDurationMs(Math.random());
   a.stats = applySocial(a.stats, kind, now);
   b.stats = applySocial(b.stats, kind, now);
   saveStats(a.slot, a.stats);
   saveStats(b.slot, b.stats);
-  if (kind === "play") {
-    // Face each other, bounce happily.
-    a.dir = a.x < b.x ? 1 : -1;
-    b.dir = b.x < a.x ? 1 : -1;
-    a.happyUntil = now + HAPPY_MS;
-    b.happyUntil = now + HAPPY_MS;
-    a.startJump(0.6);
-    b.startJump(0.6);
-    showMsg(`${a.label()} и ${b.label()} играют!`);
-    playPetSound(a.skinId);
-  } else if (kind === "chase") {
-    // Both dash off in one direction.
-    const dir = Math.random() < 0.5 ? 1 : -1;
-    a.dir = dir;
-    b.dir = dir;
-    a.happyUntil = now + HAPPY_MS;
-    b.happyUntil = now + HAPPY_MS;
-    a.startJump(0.7);
-    b.startJump(0.7);
-    showMsg(`${a.label()} и ${b.label()} — догонялки!`);
-    playPetSound(b.skinId);
-  } else {
-    // Paws out: face off, hop back, mood stings a little.
-    a.dir = a.x < b.x ? 1 : -1;
-    b.dir = b.x < a.x ? 1 : -1;
-    a.startJump(0.8);
-    b.startJump(0.8);
-    showMsg(`${a.label()} и ${b.label()} повздорили!`);
-  }
-  renderStats();
+  startScene(kind, dur, now);
 }
 
 /** Reconcile live pets with the pack from main (slot = index). */
 function applyPack(skins: string[]): void {
   const pack = normalizePack(skins);
+  social = null; // pack changed mid-scene — drop the choreography
   // Remove extras.
   while (pets.length > pack.length) {
     const removed = pets.pop();
@@ -804,6 +1090,7 @@ window.addEventListener("mouseup", () => {
   dragPet.speedCur = 0;
   dragPet.strideAcc = 0;
   dragPet = null;
+  playDrop();
   window.petAPI?.setClickable(false);
 });
 
@@ -837,8 +1124,9 @@ function frame(): void {
   const dt = Math.min(Math.max((now - lastFrame) / 1000, 0), 0.1);
   lastFrame = now;
   if (paused) return;
-  for (const p of pets) p.step(dt, now);
   checkSocial(now);
+  socialStep(now);
+  for (const p of pets) p.step(dt, now);
 }
 requestAnimationFrame(frame);
 
