@@ -25,6 +25,7 @@ const cColor = document.getElementById("c-color") as HTMLInputElement;
 const cNotify = document.getElementById("c-notify") as HTMLInputElement;
 const cSound = document.getElementById("c-sound") as HTMLInputElement;
 const cLogin = document.getElementById("c-login") as HTMLInputElement;
+const cFps = document.getElementById("c-fps") as HTMLInputElement;
 
 /** Last snapshot from main (drives dependent controls like the pack pair). */
 let current: SettingsSnapshot | null = null;
@@ -81,6 +82,7 @@ function applyToForm(s: SettingsSnapshot): void {
   cNotify.checked = !!s.notifyHungry;
   cSound.checked = !s.muted;
   cLogin.checked = !!s.openAtLogin;
+  cFps.checked = !!s.fpsMeter;
 }
 
 pet0El.addEventListener("change", () => {
@@ -110,6 +112,7 @@ cColor.addEventListener("change", () => window.petAPI?.setSettings({ colorMode: 
 cNotify.addEventListener("change", () => window.petAPI?.setSettings({ notifyHungry: cNotify.checked }));
 cSound.addEventListener("change", () => window.petAPI?.setSettings({ muted: !cSound.checked }));
 cLogin.addEventListener("change", () => window.petAPI?.setSettings({ openAtLogin: cLogin.checked }));
+cFps.addEventListener("change", () => window.petAPI?.setSettings({ fpsMeter: cFps.checked }));
 document.getElementById("close")?.addEventListener("click", () => window.petAPI?.closeSettings());
 document.getElementById("updates")?.addEventListener("click", () => window.petAPI?.checkForUpdates());
 

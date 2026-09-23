@@ -27,6 +27,8 @@ const PET_SCALES = [0.85, 1, 1.3, 1.6];
 let pack: string[] = ["cat"];
 /** Display for the pet strip: explicit monitor id, or null = follow primary. */
 let displayId: number | null = null;
+/** FPS meter row in the status window. */
+let fpsMeter = false;
 /** Drawing style for the whole pack (ASCII1 classic / ASCII2 blocks). */
 let style: string = DEFAULT_STYLE;
 /** Floating status window (free placement, hideable). Owned by main. */
@@ -67,6 +69,7 @@ interface AppSettings {
   showStatus?: boolean;
   statusPos?: { x?: number; y?: number };
   displayId?: number | null;
+  fpsMeter?: boolean;
 }
 
 function settingsPath(): string {
@@ -109,6 +112,7 @@ function loadSettings(): void {
   if (s.pack !== undefined) pack = normalizePack(s.pack);
   if (s.style !== undefined) style = normalizeStyle(s.style);
   if (s.displayId === null || typeof s.displayId === "number") displayId = s.displayId;
+  if (typeof s.fpsMeter === "boolean") fpsMeter = s.fpsMeter;
 }
 
 function saveSettings(): void {
@@ -116,7 +120,7 @@ function saveSettings(): void {
     fs.mkdirSync(path.dirname(settingsPath()), { recursive: true });
     fs.writeFileSync(
       settingsPath(),
-      JSON.stringify({ onTop, openAtLogin, pack, style, colorMode, notifyHungry, muted, petScale, showStatus, statusPos, displayId }),
+      JSON.stringify({ onTop, openAtLogin, pack, style, colorMode, notifyHungry, muted, petScale, showStatus, statusPos, displayId, fpsMeter }),
     );
   } catch {
     // Settings are best-effort; the app works without them.
@@ -409,6 +413,7 @@ function settingsSnapshot(): SettingsSnapshot {
     petScale,
     openAtLogin,
     displayId,
+    fpsMeter,
   };
 }
 
@@ -416,6 +421,9 @@ function settingsSnapshot(): SettingsSnapshot {
 function broadcastSettings(): void {
   if (settingsWin && !settingsWin.isDestroyed()) {
     settingsWin.webContents.send("settings-updated", settingsSnapshot());
+  }
+  if (statusWin && !statusWin.isDestroyed()) {
+    statusWin.webContents.send("settings-updated", settingsSnapshot());
   }
 }
 
@@ -465,6 +473,12 @@ function applySettings(update: SettingsUpdate): void {
     broadcastSettings();
     broadcastDisplays();
   }
+  if (typeof update.fpsMeter === "boolean" && update.fpsMeter !== fpsMeter) {
+    fpsMeter = update.fpsMeter;
+    saveSettings();
+    refreshTrayMenu();
+    broadcastSettings();
+  }
 }
 
 function sendToRenderer(channel: "pet-action" | "pet-feed" | "pet-clean-poop"): void {
@@ -492,7 +506,18 @@ function setupAutoUpdate(): void {
       }
     });
     // Delayed first check so the pet shows up before any dialog.
-    setTimeout(() => void autoUpdater.checkForUpdatesAndNotify?.(), 15_000);
+    setTimeout(() => {
+      try {
+        const r = autoUpdater.checkForUpdatesAndNotify?.() as unknown;
+        if (r && typeof (r as Promise<unknown>).catch === "function") {
+          void (r as Promise<unknown>).catch(() => {
+            // No publish config / offline — app works without updates.
+          });
+        }
+      } catch {
+        // electron-updater missing — app works without updates.
+      }
+    }, 15_000);
   } catch {
     // electron-updater missing or no publish config — app works without updates.
   }
@@ -502,7 +527,12 @@ function checkForUpdatesNow(): void {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { autoUpdater } = require("electron-updater") as typeof import("electron-updater");
-    void autoUpdater.checkForUpdatesAndNotify?.();
+    const r = autoUpdater.checkForUpdatesAndNotify?.() as unknown;
+    if (r && typeof (r as Promise<unknown>).catch === "function") {
+      void (r as Promise<unknown>).catch(() => {
+        // No publish config / offline — silent, tooltip still updates.
+      });
+    }
   } catch {
     // No updater (dev/portable) — nothing to check.
   }

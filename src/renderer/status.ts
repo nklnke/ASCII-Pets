@@ -8,6 +8,10 @@ import "./pet-api";
 
 const petsEl = document.getElementById("pets") as HTMLDivElement;
 const msgEl = document.getElementById("msg") as HTMLDivElement;
+const fpsEl = document.getElementById("fps") as HTMLDivElement;
+
+/** FPS row visibility (owned by main via the settings snapshot). */
+let showFps = false;
 
 function barColor(v: number): string {
   if (v > 60) return "#7dd87d";
@@ -81,7 +85,23 @@ window.petAPI?.onStatusUpdate((snapshots) => {
   render(snapshots);
   const cleanBtn = document.getElementById("clean") as HTMLButtonElement | null;
   if (cleanBtn) cleanBtn.disabled = !snapshots.some((s) => s.dirty);
+  if (showFps) {
+    const fps = snapshots.find((s) => typeof s.fps === "number")?.fps;
+    fpsEl.textContent = typeof fps === "number" ? `FPS: ${fps}` : "";
+  }
   reportSize();
+});
+window.petAPI?.onSettingsUpdate((s) => {
+  showFps = !!s.fpsMeter;
+  fpsEl.style.display = showFps ? "" : "none";
+  if (!showFps) fpsEl.textContent = "";
+  // The row changes the card height — re-report for the window fit.
+  lastStatusH = 0;
+  reportSize();
+});
+void window.petAPI?.getSettings?.().then((s) => {
+  showFps = !!s.fpsMeter;
+  fpsEl.style.display = showFps ? "" : "none";
 });
 
 /** Tell main the real card height so it can fit 1–3 pets (only on change). */

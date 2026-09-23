@@ -19,6 +19,8 @@ export interface PetSnapshot {
   charH: number;
   cols: number;
   rows: number;
+  /** Strip render-loop rate (EMA, same for the whole pack). Optional for compat. */
+  fps?: number;
 }
 
 /** Full app settings snapshot (owned by main, shown in the settings window). */
@@ -35,6 +37,8 @@ export interface SettingsSnapshot {
   openAtLogin: boolean;
   /** Selected monitor id, or null = follow the primary display. */
   displayId: number | null;
+  /** FPS meter row in the status window. */
+  fpsMeter: boolean;
 }
 
 /** One row of the monitor picker (dynamic — displays come and go). */

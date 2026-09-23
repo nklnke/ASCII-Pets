@@ -201,6 +201,9 @@ class Pet {
   nextCroak = 0;
   // Per-cell inversion: last ink grid from main + live span map.
   ink: CellInk | null = null;
+  /** Painted flag + last painted values (incremental paintInk skips equals). */
+  inkPainted = false;
+  inkCache: { w: number; h: number; colors: string[]; shadows: string[] } | null = null;
   shownText: string | null = null;
   gridW = 0;
   gridH = 0;
@@ -385,35 +388,57 @@ class Pet {
     }
     this.el.appendChild(frag);
     this.cellSpans = spans;
+    // Fresh spans carry no styles — drop the paint cache so all cells repaint.
+    this.inkPainted = false;
+    this.inkCache = null;
     this.paintInk();
   }
 
-  /** Paint the stored per-cell ink onto the live spans. */
+  /** Paint the stored per-cell ink onto the live spans (only changed cells). */
   paintInk(): void {
     const ink = this.ink;
     if (!ink) {
-      for (const s of this.cellSpans) {
-        if (s) {
-          s.style.color = "";
-          s.style.textShadow = "";
+      if (this.inkPainted) {
+        for (const s of this.cellSpans) {
+          if (s) {
+            s.style.color = "";
+            s.style.textShadow = "";
+          }
         }
+        this.inkPainted = false;
+        this.inkCache = null;
       }
       return;
     }
     // Grid mismatch (frame changed since the sample) — keep stale colors
-    // until the next sample arrives (~1s) rather than flashing white.
+    // until the next sample arrives rather than flashing white.
     if (ink.w !== this.gridW || ink.h !== this.gridH) return;
+    const cache = this.inkCache;
+    const sameGrid = cache !== null && cache.w === ink.w && cache.h === ink.h;
     for (let i = 0; i < this.cellSpans.length; i++) {
       const s = this.cellSpans[i];
       if (!s) continue; // spaces are never colored
       const color = ink.colors[i];
       const shadow = ink.shadows[i];
       if (typeof color !== "string" || typeof shadow !== "string") continue;
+      const shadowCss = style === "ascii3" ? "" : `0 0 4px ${shadow}, 1px 1px 0 ${shadow}`;
+      // Unchanged cells keep their styles: no style recalc, no repaint.
+      if (sameGrid && cache.colors[i] === color && cache.shadows[i] === shadowCss) continue;
       s.style.color = color;
       // Pixel style fuses glyphs into one blob with a shared silhouette
       // (CSS filter) — per-glyph shadows would turn to mud.
-      s.style.textShadow = style === "ascii3" ? "" : `0 0 4px ${shadow}, 1px 1px 0 ${shadow}`;
+      s.style.textShadow = shadowCss;
     }
+    this.inkPainted = true;
+    this.inkCache = {
+      w: ink.w,
+      h: ink.h,
+      colors: ink.colors.slice(),
+      shadows: ink.colors.map((_, i) => {
+        const sh = ink.shadows[i];
+        return style === "ascii3" ? "" : `0 0 4px ${sh}, 1px 1px 0 ${sh}`;
+      }),
+    };
   }
 
   doPet(): void {
@@ -837,6 +862,7 @@ function renderStats(): void {
         charH: cell.h,
         cols: grid.cols,
         rows: grid.rows,
+        fps: Math.round(fpsEma),
       };
     }),
   );
@@ -1430,11 +1456,14 @@ window.addEventListener("mousedown", (e: MouseEvent) => {
 // Single position writer: rAF with dt-based speeds (smooth, no CSS transition
 // chasing a moving target). Walk along the strip, bounce at edges.
 let lastFrame = Date.now();
+/** Render-loop rate (EMA) for the FPS meter; pushed with the stats snapshot. */
+let fpsEma = 60;
 function frame(): void {
   requestAnimationFrame(frame);
   const now = Date.now();
   const dt = Math.min(Math.max((now - lastFrame) / 1000, 0), 0.1);
   lastFrame = now;
+  if (dt > 0) fpsEma += (1 / dt - fpsEma) * 0.1;
   if (paused) return;
   checkSocial(now);
   socialStep(now);
