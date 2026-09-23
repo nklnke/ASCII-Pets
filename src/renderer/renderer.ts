@@ -316,8 +316,11 @@ class Pet {
       console.warn(`[teleport] ${this.label()} slot=${this.slot} x ${this.lastRx} -> ${rx}`);
     }
     this.lastRx = rx;
-    // Fractional translate: integer rounding here stepped visibly at low speeds.
-    this.el.style.transform = `translateX(${this.x.toFixed(1)}px) translateY(${this.yOffset(now).toFixed(1)}px)`;
+    // Fast motion on fractional pixels shimmers (glyphs + text-shadow hang
+    // between LCD pixels), so snap X to whole pixels at speed. Slow speeds
+    // keep the fraction: integer rounding there stepped visibly.
+    const qx = Math.abs(this.speedCur) > 50 ? Math.round(this.x) : this.x;
+    this.el.style.transform = `translateX(${qx.toFixed(1)}px) translateY(${this.yOffset(now).toFixed(1)}px)`;
   }
 
   /** Vertical glyph offset (jump arc + stride bob) for the backdrop sampler. */
@@ -330,9 +333,10 @@ class Pet {
   bobAmp(now: number): number {
     if (this.hopper() || this.sleeping() || this.sniffing(now)) return 0;
     const gait = this.gait === "sniff" ? "walk" : this.gait;
-    // Small on purpose: the whole sprite rides this sine at stride frequency,
-    // and 1px+ reads as trembling (worse at scurry pace).
-    return gait === "scurry" ? 0.7 : gait === "amble" ? 0.4 : 0.5;
+    // No bob at scurry pace: the whole sprite rides this sine at stride
+    // frequency, and even sub-pixel amplitude reads as trembling when fast.
+    // Amble/walk keep a gentle sway (low frequency, looks natural).
+    return gait === "scurry" ? 0 : gait === "amble" ? 0.4 : 0.5;
   }
 
   gridSize(): { cols: number; rows: number } {
