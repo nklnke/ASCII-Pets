@@ -8,6 +8,7 @@ import {
   feedPet,
   isHungry,
   isPettingSpam,
+  isResting,
   isSleepy,
   petPet,
   rollPoop,
@@ -597,7 +598,8 @@ class Pet {
   }
 
   tickNeeds(elapsedMin: number): void {
-    this.stats = tickStats(this.stats, elapsedMin, paused, Date.now());
+    // Sleep counts as rest: a sleeping pet naps the energy back by itself.
+    this.stats = tickStats(this.stats, elapsedMin, isResting(this.stats, paused), Date.now());
     // Each uncleaned pile rots the mood on top of the normal drift.
     for (let i = 0; i < this.piles.length; i++) {
       this.stats = tickDirty(this.stats, elapsedMin, Date.now());

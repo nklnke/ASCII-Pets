@@ -80,6 +80,11 @@ export function isSleepy(s: PetStats): boolean {
   return s.energy <= SLEEPY_AT;
 }
 
+/** Sleep counts as rest: a sleeping pet recovers energy like a paused one. */
+export function isResting(s: PetStats, paused: boolean): boolean {
+  return paused || s.energy <= SLEEPY_AT;
+}
+
 // Poop mechanics (simple variant): after each meal the pet may leave a pile
 // with POOP_CHANCE. While a pile is present the pet's mood rots via tickDirty.
 // Cleanup itself lives in the renderer (pile element + click handler).

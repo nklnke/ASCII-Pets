@@ -14,6 +14,7 @@ import {
   petPet,
   feedPet,
   isHungry,
+  isResting,
   isSleepy,
 } from "../dist/shared/pet-stats.js";
 
@@ -65,6 +66,16 @@ describe("pet-stats", () => {
   it("sleepiness kicks in at zero energy", () => {
     const s = { ...createInitialStats(0), energy: 5 };
     assert.equal(isSleepy(s), true);
+  });
+
+  it("sleep counts as rest and recovers energy", () => {
+    const sleepy = { ...createInitialStats(0), energy: 5 };
+    assert.equal(isResting(sleepy, false), true);
+    assert.equal(isResting(createInitialStats(0), false), false);
+    assert.equal(isResting(createInitialStats(0), true), true);
+    const next = tickStats(sleepy, 2, isResting(sleepy, false), 120_000);
+    assert.ok(next.energy > sleepy.energy);
+    assert.equal(isSleepy(next), false);
   });
 
   it("poop roll is deterministic from injected randomness", () => {
