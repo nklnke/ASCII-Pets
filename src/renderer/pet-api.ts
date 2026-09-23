@@ -3,7 +3,7 @@
 // so the two global Window declarations never diverge.
 
 import type { CellInk } from "../shared/color";
-import type { PetSnapshot, SettingsSnapshot, SettingsUpdate } from "../shared/ipc";
+import type { PetSnapshot, SettingsSnapshot, SettingsUpdate, DisplayOption } from "../shared/ipc";
 
 export interface PetApi {
   setClickable: (clickable: boolean) => void;
@@ -45,6 +45,9 @@ export interface PetApi {
   checkForUpdates: () => void;
   /** Settings window: report the card height so main can shrink-wrap the window. */
   reportSettingsSize: (height: number) => void;
+  /** Monitor picker: dynamic display list. */
+  getDisplays: () => Promise<DisplayOption[]>;
+  onDisplaysUpdate: (cb: (displays: DisplayOption[]) => void) => void;
 }
 
 declare global {
