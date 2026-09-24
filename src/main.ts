@@ -6,7 +6,7 @@ import { cssRgb, invertRgb, medianRgb, cellCenter, Rgb, CellInk } from "./shared
 import type { PetSnapshot, SettingsSnapshot, SettingsUpdate, DisplayOption } from "./shared/ipc";
 import { HUNGRY_AT } from "./shared/pet-stats";
 import { shouldNotifyHunger } from "./shared/notify";
-import { stripBounds, displayLabel, pickDisplayId } from "./shared/placement";
+import { stageBounds, displayLabel, pickDisplayId } from "./shared/placement";
 import { normalizePack, normalizeStyle, DEFAULT_STYLE } from "./shared/skins";
 
 let win: BrowserWindow | null = null;
@@ -25,7 +25,7 @@ let petScale = 1;
 const PET_SCALES = [0.85, 1, 1.3, 1.6];
 /** Pack = skin id per pet slot; renderer mirrors it. */
 let pack: string[] = ["cat"];
-/** Display for the pet strip: explicit monitor id, or null = follow primary. */
+/** Display for the pet stage: explicit monitor id, or null = follow primary. */
 let displayId: number | null = null;
 /** FPS meter row in the status window. */
 let fpsMeter = false;
@@ -37,7 +37,7 @@ let showStatus = true;
 let statusPos: { x: number; y: number } | null = null;
 /** Settings window (frameless card, opened from the menu or status ⚙). */
 let settingsWin: BrowserWindow | null = null;
-/** Latest toast line from the strip (mirrored into the status window). */
+/** Latest toast line from the stage (mirrored into the status window). */
 let lastMsg = "";
 /** Latest snapshot pushed by the renderer (for the tray tooltip + sampler). */
 let lastStats: PetSnapshot[] = [];
@@ -45,7 +45,6 @@ let sampler: NodeJS.Timeout | null = null;
 /** Slow guard that re-claims the always-on-top level. */
 let topGuard: NodeJS.Timeout | null = null;
 
-const PET_H = 200;
 const SAMPLE_BASE_MS = 2000;
 const SAMPLE_MAX_MS = 5000;
 /** A sample slower than this backs the interval off (HDR/144Hz/HiDPI machines). */
@@ -143,11 +142,10 @@ function assetPath(file: string): string {
   return path.join(__dirname, "..", "assets", file);
 }
 
-// Full-width transparent strip glued to the taskbar edge of the SELECTED
-// display (settings window picks it; null follows the primary display).
-// The window bottom sits flush with the work-area bottom (= the
-// taskbar's top edge), so the pet floor is exactly on it and every jump
-// starts from it; edge detection keeps it correct for top/side taskbars too.
+// Full-workArea transparent stage on the SELECTED display (settings window
+// picks it; null follows the primary display). The window covers the whole
+// workArea (visible area without the taskbar), so the pet floor is exactly
+// its bottom edge and every jump starts from it.
 function selectedDisplay(): Display {
   const all = screen.getAllDisplays();
   return all.find((d) => d.id === displayId) ?? screen.getPrimaryDisplay();
@@ -186,7 +184,7 @@ function pruneDisplay(): void {
 
 function stripRect(): { x: number; y: number; width: number; height: number } {
   const d = selectedDisplay();
-  return stripBounds(d.bounds, d.workArea, PET_H);
+  return stageBounds(d.workArea);
 }
 
 function applyAlwaysOnTop(): void {
@@ -622,14 +620,14 @@ function trayIconPath(): string | undefined {
   return undefined;
 }
 
-/** Tray = the app's presence in the system (the strip hides from the taskbar). */
+/** Tray = the app's presence in the system (the stage hides from the taskbar). */
 function createTray(): void {
   const icon = trayIconPath();
   if (!icon) return;
   tray = new Tray(icon);
   tray.setToolTip("ASCII Pets");
   tray.setContextMenu(Menu.buildFromTemplate(menuTemplate()));
-  // Left click opens the menu too — the pet strip is easy to miss.
+  // Left click opens the menu too — the pet stage is easy to miss.
   tray.on("click", () => {
     if (tray && !tray.isDestroyed()) tray.popUpContextMenu();
   });
@@ -691,12 +689,12 @@ function placeWindow(startled: boolean): void {
 const STATUS_W = 300;
 const STATUS_H = 260;
 
-/** First-launch spot: bottom-right, just above the pet strip (selected display). */
+/** First-launch spot: bottom-right, just above the pet floor (selected display). */
 function defaultStatusPos(): { x: number; y: number } {
   const wa = selectedDisplay().workArea;
   return {
     x: Math.round(wa.x + wa.width - STATUS_W - 12),
-    y: Math.round(wa.y + wa.height - STATUS_H - PET_H - 24),
+    y: Math.round(wa.y + wa.height - STATUS_H - 24),
   };
 }
 
@@ -710,7 +708,7 @@ function clampStatusPos(p: { x: number; y: number }): { x: number; y: number } {
 }
 
 /** Free-floating status card: bars, counters, last toast, close button.
- *  Unlike the strip it is a normal interactive window (no click-through). */
+ *  Unlike the stage it is a normal interactive window (no click-through). */
 function createStatusWindow(): void {
   const pos = clampStatusPos(statusPos ?? defaultStatusPos());
   statusWin = new BrowserWindow({
@@ -913,7 +911,7 @@ void app.whenReady().then(() => {
       if (statusWin && !statusWin.isDestroyed()) statusWin.webContents.send("status-update", lastStats);
     }
   });
-  // Toast relay: the strip forwards showMsg lines, main mirrors them to status.
+  // Toast relay: the stage forwards showMsg lines, main mirrors them to status.
   ipcMain.on("pet-msg", (_event, text: unknown) => {
     if (typeof text !== "string" || text.length === 0) return;
     lastMsg = text;
@@ -943,7 +941,7 @@ void app.whenReady().then(() => {
   });
   ipcMain.on("check-for-updates", () => checkForUpdatesNow());
 
-  // Pet lives on the selected display; re-hug the taskbar edge whenever
+  // Pet lives on the selected display; re-fit the workArea whenever
   // displays or their metrics change (resolution, scale, taskbar move,
   // monitor plugged/unplugged). A stored monitor that is gone falls back
   // to primary and the picker list refreshes.

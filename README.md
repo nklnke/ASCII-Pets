@@ -121,11 +121,11 @@ npm run check
 
 ```
 src/
-  main.ts            # окно-полоса, трей, семплер фона, настройки, автообновление
+  main.ts            # окно на весь workArea, трей, семплер фона, настройки, автообновление
   preload.ts         # единственный мост window.petAPI (contextIsolation, без Node в рендере)
   shared/            # чистая логика без Electron/DOM (покрыта тестами)
     pet-stats.ts     # голод/настроение/энергия, выносливость по скинам
-    placement.ts     # stripBounds() — определение края таскбара, выбор монитора
+    placement.ts     # stageBounds() — окно на весь workArea, выбор монитора
     skins.ts         # реестр скинов/стилей, normalizePack, MAX_PETS=3
     temperament.ts   # CALM/WILD пресеты, rollGait / jitterTemperament
     color.ts         # invert/median/css, frameCells, per-cell ink
@@ -158,9 +158,9 @@ assets/              # сгенерированные иконки, не пра�
 
 ## Контракт окна (не ломать)
 
-- Полоса на **выбранном мониторе** (`displayId`, по умолчанию primary) через `stripBounds()` (`PET_H=200`); низ окна впритык к низу workArea (= верхняя кромка таскбара), пол питомцев ровно на ней, все прыжки стартуют от неё.
+- Окно на весь **выбранный монитор** (`displayId`, по умолчанию primary) через `stageBounds()` (= его `workArea`, видимая область без таскбара); низ окна впритык к низу workArea (= верхняя кромка таскбара), пол питомцев ровно на ней, все прыжки стартуют от неё.
 - `transparent: true, frame: false`, `setAlwaysOnTop(true, "screen-saver")` (именно `screen-saver` — поверх таскбара; `floating` прячется за ним), `skipTaskbar: true`.
-- Click-through по умолчанию (`setIgnoreMouseEvents(true, { forward: true })`); кликабельность включается только при наведении на питомца через IPC `set-clickable`. Всю полосу кликабельной делать нельзя — перекроет таскбар.
+- Click-through по умолчанию (`setIgnoreMouseEvents(true, { forward: true })`); кликабельность включается только при наведении на питомца через IPC `set-clickable`. Всё окно кликабельным делать нельзя — перекроет таскбар/рабочий стол.
 - В рендере нет Node (`contextIsolation: true, nodeIntegration: false`) — никакого CommonJS `require()` там, иначе окно останется невидимо пустым.
 
 ## Тесты

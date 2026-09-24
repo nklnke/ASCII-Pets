@@ -1,6 +1,7 @@
 // Pure window-placement math: no Electron imports, fully testable.
-// The strip overlays the taskbar edge (screen.bounds includes the taskbar area,
-// workArea excludes it) so the pet walks "on" the taskbar.
+// The stage covers the whole workArea of the selected display (visible area
+// without the taskbar), so the pet floor is the work-area bottom (= the
+// taskbar's top edge) and pets stand exactly on it.
 
 export interface Rect {
   x: number;
@@ -34,19 +35,12 @@ export function detectTaskbarEdge(bounds: Rect, workArea: Rect): TaskbarEdge {
 }
 
 /**
- * Full-width strip glued to the taskbar edge.
+ * Full-workArea stage on the selected display.
  * The window bottom sits flush with the work-area bottom (= the taskbar's
  * top edge): pets stand exactly on it and every jump starts from it.
- * For vertical (left/right) taskbars the horizontal strip stays at the
- * bottom — it doesn't conflict with a side taskbar.
  */
-export function stripBounds(bounds: Rect, workArea: Rect, petH: number): Rect {
-  const edge = detectTaskbarEdge(bounds, workArea);
-  const y =
-    edge === "top"
-      ? workArea.y
-      : workArea.y + workArea.height - petH;
-  return { x: bounds.x, y, width: bounds.width, height: petH };
+export function stageBounds(workArea: Rect): Rect {
+  return { x: workArea.x, y: workArea.y, width: workArea.width, height: workArea.height };
 }
 
 /** Human label for the monitor picker ("Монитор 1 — 1920×1080 (основной)"). */
