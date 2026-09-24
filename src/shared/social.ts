@@ -106,12 +106,17 @@ export function socialDurationMs(r: number): number {
   return Math.round(SOCIAL_MIN_MS + t * (SOCIAL_MAX_MS - SOCIAL_MIN_MS));
 }
 
-/** Apply the mood + energy effect of a social event. */
-export function applySocial(s: PetStats, kind: SocialKind, now: number): PetStats {
+/**
+ * Apply the mood + energy effect of a social event.
+ * energyScale follows the skin's endurance (energyDrainFor): a hardy skin
+ * pays less for the same romp, a frail one more. Defaults to 1 (unscaled).
+ */
+export function applySocial(s: PetStats, kind: SocialKind, now: number, energyScale = 1): PetStats {
+  const scale = typeof energyScale === "number" && isFinite(energyScale) && energyScale > 0 ? energyScale : 1;
   return {
     ...s,
     mood: clamp(s.mood + socialMoodDelta(kind)),
-    energy: clamp(s.energy + socialEnergyDelta(kind)),
+    energy: clamp(s.energy + Math.round(socialEnergyDelta(kind) * scale)),
     updatedAt: now,
   };
 }

@@ -84,4 +84,15 @@ describe("social", () => {
     assert.ok(sniffed.mood > s.mood);
     assert.equal(sniffed.energy, s.energy);
   });
+
+  it("applySocial scales the energy cost by endurance, mood stays flat", () => {
+    const s = { ...createInitialStats(0), mood: 50, energy: 80 };
+    const dog = applySocial(s, "race", 1000, 0.5);
+    const frog = applySocial(s, "race", 1000, 2);
+    assert.equal(dog.mood, frog.mood);
+    assert.ok(dog.energy > s.energy - 12 && dog.energy < 80);
+    assert.ok(frog.energy < dog.energy);
+    // Default scale keeps the legacy flat cost.
+    assert.equal(applySocial(s, "race", 1000).energy, s.energy - 12);
+  });
 });

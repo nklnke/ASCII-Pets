@@ -70,7 +70,7 @@ export function feedPet(s: PetStats, now: number): PetStats {
     meals: s.meals + 1,
     hunger: clamp(s.hunger - 60),
     mood: clamp(s.mood + 5),
-    energy: clamp(s.energy + 5),
+    energy: clamp(s.energy + 25),
     updatedAt: now,
   };
 }
@@ -90,8 +90,8 @@ export function isResting(s: PetStats, paused: boolean): boolean {
 
 /** Walking energy drain per skin (endurance): dog lasts longest, frog tires fast. */
 export function energyDrainFor(skinId: string): number {
-  if (skinId === "dog") return 0.7;
-  if (skinId === "frog") return 1.4;
+  if (skinId === "dog") return 0.5;
+  if (skinId === "frog") return 2;
   return 1;
 }
 

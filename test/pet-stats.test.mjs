@@ -63,6 +63,9 @@ describe("pet-stats", () => {
     assert.equal(s.meals, 1);
     assert.ok(s.hunger < 95);
     assert.equal(isHungry(s), false);
+    // Feeding is a strong energy boost (wakes a sleepy pet up).
+    const tired = { ...createInitialStats(0), energy: 10 };
+    assert.equal(feedPet(tired, 1000).energy, 35);
   });
 
   it("sleepiness kicks in at zero energy", () => {
@@ -88,9 +91,9 @@ describe("pet-stats", () => {
   });
 
   it("endurance differs per skin: dog outlasts frog", () => {
-    assert.equal(energyDrainFor("dog"), 0.7);
+    assert.equal(energyDrainFor("dog"), 0.5);
     assert.equal(energyDrainFor("cat"), 1);
-    assert.equal(energyDrainFor("frog"), 1.4);
+    assert.equal(energyDrainFor("frog"), 2);
     assert.equal(energyDrainFor("unknown-skin"), 1);
     const s = { ...createInitialStats(0), energy: 50 };
     const dog = tickStats(s, 10, false, 600_000, energyDrainFor("dog"));

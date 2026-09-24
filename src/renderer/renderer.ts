@@ -1087,7 +1087,7 @@ function renderStats(): void {
         pets: p.stats.pets,
         meals: p.stats.meals,
         ox: Math.round(p.x) + cell.padL,
-        // Bottom-anchored pets: text top = strip bottom edge, minus the
+        // Bottom-anchored pets: text top = stage bottom edge, minus the
         // element height, plus padding and the live jump/bob offset.
         oy: Math.round(window.innerHeight - cell.bottom - p.hitEl().offsetHeight + cell.padT + p.yOffset(now)),
         charW: cell.w,
@@ -1530,7 +1530,7 @@ function checkSocial(now: number): void {
       lastSocial.set("trio", now);
       const dur = socialDurationMs(Math.random());
       for (const p of pets) {
-        p.stats = applySocial(p.stats, trio, now);
+        p.stats = applySocial(p.stats, trio, now, energyDrainFor(p.skinId));
         saveStats(p.slot, p.stats);
       }
       startScene(trio, [...pets], dur, now);
@@ -1558,7 +1558,7 @@ function checkSocial(now: number): void {
   lastSocial.set(pairKey(pick.a.slot, pick.b.slot), now);
   const dur = socialDurationMs(Math.random());
   for (const p of [pick.a, pick.b]) {
-    p.stats = applySocial(p.stats, pick.kind, now);
+    p.stats = applySocial(p.stats, pick.kind, now, energyDrainFor(p.skinId));
     saveStats(p.slot, p.stats);
   }
   startScene(pick.kind, [pick.a, pick.b], dur, now);
@@ -1621,7 +1621,7 @@ window.addEventListener("mouseup", () => {
   if (Math.abs(v) >= FLING_MIN_V && !thrown.sleeping()) {
     const speed = Math.min(Math.abs(v), FLING_MAX_V);
     thrown.dir = v > 0 ? 1 : -1;
-    thrown.stats = { ...thrown.stats, energy: Math.max(0, thrown.stats.energy - FLING_ENERGY_COST), updatedAt: now };
+    thrown.stats = { ...thrown.stats, energy: Math.max(0, Math.round(thrown.stats.energy - FLING_ENERGY_COST * energyDrainFor(thrown.skinId))), updatedAt: now };
     saveStats(thrown.slot, thrown.stats);
     if (thrown.hopper()) {
       // Hoppers can't slide: one big leap in the throw direction.
