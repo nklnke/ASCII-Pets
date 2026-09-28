@@ -499,6 +499,24 @@ function sendToRenderer(channel: "pet-action" | "pet-feed" | "pet-clean-poop"): 
 }
 
 /** Auto-update via electron-updater (NSIS target only; portable has no updater). */
+let updaterErrorHooked = false;
+function hookUpdaterErrors(updater: { on(event: "error", listener: (error: Error) => void): unknown }): void {
+  if (updaterErrorHooked) return;
+  updaterErrorHooked = true;
+  try {
+    // Unhandled 'error' events throw — swallow: offline / no publish config /
+    // portable runs are all normal and the app works without updates.
+    updater.on("error", () => {});
+  } catch {
+    // Emitter going away — nothing to hook.
+  }
+}
+
+/** electron-builder portable sets this at runtime; only NSIS self-updates. */
+function isPortableRun(): boolean {
+  return typeof process.env.PORTABLE_EXECUTABLE_DIR === "string";
+}
+
 function setupAutoUpdate(): void {
   if (!app.isPackaged) return;
   try {
@@ -507,6 +525,10 @@ function setupAutoUpdate(): void {
     const { autoUpdater } = require("electron-updater") as typeof import("electron-updater");
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
+    // We ship plain NSIS, not nsis-web (no signature verification on web
+    // payloads) — refuse such payloads if the server ever offers one.
+    autoUpdater.disableWebInstaller = true;
+    hookUpdaterErrors(autoUpdater);
     autoUpdater.on("update-downloaded", () => {
       try {
         const n = new Notification({
@@ -537,9 +559,11 @@ function setupAutoUpdate(): void {
 }
 
 function checkForUpdatesNow(): void {
+  if (isPortableRun()) return; // Portable builds update by re-downloading.
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { autoUpdater } = require("electron-updater") as typeof import("electron-updater");
+    hookUpdaterErrors(autoUpdater);
     const r = autoUpdater.checkForUpdatesAndNotify?.() as unknown;
     if (r && typeof (r as Promise<unknown>).catch === "function") {
       void (r as Promise<unknown>).catch(() => {
@@ -565,7 +589,11 @@ function menuTemplate(): MenuItemConstructorOptions[] {
     { type: "separator" },
     { label: "Настройки…", click: () => openSettings() },
     { type: "separator" },
-    { label: "Проверить обновления", click: () => checkForUpdatesNow() },
+    {
+      label: isPortableRun() ? "Проверить обновления (только NSIS)" : "Проверить обновления",
+      enabled: !isPortableRun(),
+      click: () => checkForUpdatesNow(),
+    },
     { label: "Выход", click: () => app.quit() },
   ];
 }
@@ -737,7 +765,10 @@ function createStatusWindow(): void {
     frame: false,
     resizable: false,
     movable: true,
-    focusable: false,
+    // Interactive card (✕/♥/🍖/💩/⚙ buttons) — must be focusable to
+    // receive clicks. Shown inactive on load so startup never steals focus.
+    focusable: true,
+    show: false,
     skipTaskbar: true,
     hasShadow: false,
     icon: iconPath(),
@@ -755,6 +786,7 @@ function createStatusWindow(): void {
     if (!statusWin || statusWin.isDestroyed()) return;
     statusWin.webContents.send("status-update", lastStats);
     if (lastMsg) statusWin.webContents.send("status-msg", lastMsg);
+    statusWin.showInactive();
   });
   // Free position persists (debounced — `move` fires continuously on Windows).
   let saveTimer: NodeJS.Timeout | null = null;
@@ -782,7 +814,11 @@ function setShowStatus(v: boolean): void {
     if (!statusWin || statusWin.isDestroyed()) createStatusWindow();
     else statusWin.show();
   } else if (statusWin && !statusWin.isDestroyed()) {
-    statusWin.hide();
+    // hide() proved unreliable for this window config (stays visible) —
+    // same as the settings window: destroy instead, reopening recreates
+    // it cheaply from the persisted position + last snapshot.
+    statusWin.destroy();
+    statusWin = null;
   }
 }
 
