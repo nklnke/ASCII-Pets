@@ -1,6 +1,6 @@
 {
   "name": "ascii-pets",
-  "version": "1.1.1",
+  "version": "0.1.1",
   "description": "ASCII-art desktop pets",
   "author": "ASCII Pets",
   "main": "dist/main.js",
@@ -14,7 +14,8 @@
     "dev": "node scripts/dev.js",
     "start": "npm run build && electron .",
     "start:fast": "npm run build:fast && electron .",
-    "dist": "npm run build && electron-builder --win nsis portable"
+    "dist": "npm run build && electron-builder --win nsis portable",
+    "dist:publish": "npm run build && electron-builder --win nsis portable -p always"
   },
   "build": {
     "appId": "com.ascii.pets",
@@ -57,6 +58,11 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "shortcutName": "ASCII Pets"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "nklnke",
+      "repo": "ASCII-Pets"
     },
     "portable": {
       "artifactName": "${productName} Portable ${version}.${ext}"

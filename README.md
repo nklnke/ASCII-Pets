@@ -6,13 +6,13 @@
 
 ![](./assets/icon.png)
 
-## Что нового в 1.1.1
+## Что нового в 0.1.1
 
 - **Сцена на весь экран**: окно покрывает весь `workArea` (раньше — полоса 200px у таскбара).
 - **Ребаланс энергии** (еда +25, выносливость по скинам в социалках и броске) и **тумблер теней** в настройках.
 - **Апдейтер**: без крашей при офлайне, portable-версия обновляется вручную (пункт меню помечен).
 
-## Что нового в 1.1.0
+## Что нового в 0.1.0
 
 - **Три питомца** и сцены встреч: парные + тройные (`huddle`, `parade`), с влиянием на настроение и энергию.
 - **Отдельное окно настроек** (питомцы, стиль, размер, монитор, поведение) + кнопка ⚙ в окне статуса.
@@ -115,7 +115,21 @@ npm run start:fast  # сборка без typecheck + запуск (быстры
 npm test       # сборка main + node --test для test/*.test.mjs
 npm run build  # tsc (main) + tsc --noEmit (check всего src/) + esbuild (renderer, минификация)
 npm run dist   # сборка + electron-builder (NSIS + portable в release/)
+npm run dist:publish  # то же + заливка в GitHub Releases (нужен GH_TOKEN)
 ```
+
+## Релиз и автообновление
+
+NSIS-сборка проверяет обновления через `electron-updater` по GitHub Releases (`publish`-конфиг в `package.json`). Как выпустить:
+
+```bash
+# 1. Токен с правами repo (GitHub → Settings → Developer settings → Personal access tokens)
+$env:GH_TOKEN = "ghp_..."
+# 2. Подними версию в package.json, обнови CHANGELOG (Unreleased → [x.y.z] — дата)
+npm run dist:publish
+```
+
+`electron-builder` создаст **draft**-релиз с файлами + `latest.yml`. Проверь файлы, нажми Publish — после этого установленные NSIS-копии подтянут обновление (скачивание в фоне, установка при выходе). Portable-версия не обновляется сама — её скачивают вручную из релиза.
 
 Проверка типов рендера отдельно:
 
