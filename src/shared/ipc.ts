@@ -39,6 +39,8 @@ export interface SettingsSnapshot {
   displayId: number | null;
   /** FPS meter row in the status window. */
   fpsMeter: boolean;
+  /** Text shadows + silhouette glow on the stage. */
+  shadows: boolean;
 }
 
 /** One row of the monitor picker (dynamic — displays come and go). */

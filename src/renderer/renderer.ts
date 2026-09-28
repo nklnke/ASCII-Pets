@@ -169,6 +169,14 @@ function clearInk(): void {
   }
 }
 
+/** Text shadows + silhouette glow (settings.json, owned by main). */
+let shadowsOn = true;
+function applyShadows(on: boolean): void {
+  shadowsOn = !!on;
+  document.documentElement.classList.toggle("no-shadows", !shadowsOn);
+  for (const p of pets) p.paintInk();
+}
+
 /** Pet font scale from main (settings.json). Invalidates the cell cache so the
  *  backdrop sampler picks up the new glyph metrics on the next pushStats. */
 function applyScale(scale: number): void {
@@ -575,7 +583,7 @@ class Pet {
       const color = ink.colors[i];
       const shadow = ink.shadows[i];
       if (typeof color !== "string" || typeof shadow !== "string") continue;
-      const shadowCss = styleFlat(style) ? "" : `0 0 4px ${shadow}, 1px 1px 0 ${shadow}`;
+      const shadowCss = !shadowsOn || styleFlat(style) ? "" : `0 0 4px ${shadow}, 1px 1px 0 ${shadow}`;
       // Unchanged cells keep their styles: no style recalc, no repaint.
       if (sameGrid && cache.colors[i] === color && cache.shadows[i] === shadowCss) continue;
       s.style.color = color;
@@ -590,7 +598,7 @@ class Pet {
       colors: ink.colors.slice(),
       shadows: ink.colors.map((_, i) => {
         const sh = ink.shadows[i];
-        return styleFlat(style) ? "" : `0 0 4px ${sh}, 1px 1px 0 ${sh}`;
+        return !shadowsOn || styleFlat(style) ? "" : `0 0 4px ${sh}, 1px 1px 0 ${sh}`;
       }),
     };
   }
@@ -1772,6 +1780,7 @@ window.petAPI?.onSetPaused((value: boolean) => {
 });
 window.petAPI?.onSetMuted((m: boolean) => setMuted(m));
 window.petAPI?.onSetScale((s: number) => applyScale(s));
+window.petAPI?.onSetShadows((on: boolean) => applyShadows(on));
 
 // Pack owner is main (settings.json); render a default first so the pet
 // never waits for IPC, then reconcile with the real pack. Ink colors arrive
@@ -1783,4 +1792,5 @@ void window.petAPI?.getStyle?.().then((s) => {
 });
 void window.petAPI?.getMuted?.().then((m) => setMuted(!!m));
 void window.petAPI?.getScale?.().then((s) => applyScale(s));
+void window.petAPI?.getShadows?.().then((on) => applyShadows(!!on));
 startAutosave(() => pets.map((p) => ({ slot: p.slot, stats: p.stats })));

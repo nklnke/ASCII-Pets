@@ -123,6 +123,19 @@
   #stage .pet span {
     transition: color 300ms linear, text-shadow 300ms linear;
   }
+  /* Shadows off (settings): kill every glow + silhouette, static and inked. */
+  html.no-shadows #stage .pet,
+  html.no-shadows #stage .pet span,
+  html.no-shadows #stage .poop,
+  html.no-shadows #stage .stink,
+  html.no-shadows #stage .note {
+    text-shadow: none !important;
+  }
+  html.no-shadows #stage .pet.flat,
+  html.no-shadows #stage .poop-wrap.flat,
+  html.no-shadows #stage canvas.petcanvas.flat {
+    filter: none !important;
+  }
   /* Pixel-canvas pets (ascii4): seamless fills, one shared silhouette. */
   #stage canvas.petcanvas {
     position: absolute;

@@ -48,6 +48,9 @@ contextBridge.exposeInMainWorld("petAPI", {
   onSetColorMode: (cb: (on: boolean) => void): void => {
     ipcRenderer.on("set-color-mode", (_event, on: boolean) => cb(on));
   },
+  onSetShadows: (cb: (on: boolean) => void): void => {
+    ipcRenderer.on("set-shadows", (_event, on: boolean) => cb(on));
+  },
   onSetPaused: (cb: (value: boolean) => void): void => {
     ipcRenderer.on("set-paused", (_event, value: boolean) => cb(value));
   },
@@ -59,6 +62,9 @@ contextBridge.exposeInMainWorld("petAPI", {
   },
   getScale: (): Promise<number> => {
     return ipcRenderer.invoke("get-scale");
+  },
+  getShadows: (): Promise<boolean> => {
+    return ipcRenderer.invoke("get-shadows");
   },
   onSetScale: (cb: (scale: number) => void): void => {
     ipcRenderer.on("set-scale", (_event, scale: number) => cb(scale));

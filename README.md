@@ -152,7 +152,7 @@ assets/              # сгенерированные иконки, не пра�
 
 ## Настройки и данные
 
-- Настройки приложения: `%APPDATA%/ASCII Pets/settings.json` (`pack`, `style`, `petScale`, `displayId`, `paused`, `colorMode`, `onTop`, `showStatus`, `openAtLogin`, `muted`, `notifyHungry`, `fpsMeter`). При первом запуске мигрируют из старого `ASCII Companion`.
+- Настройки приложения: `%APPDATA%/ASCII Pets/settings.json` (`pack`, `style`, `petScale`, `displayId`, `paused`, `colorMode`, `onTop`, `showStatus`, `openAtLogin`, `muted`, `notifyHungry`, `fpsMeter`, `shadows`). При первом запуске мигрируют из старого `ASCII Companion`.
 - Нужды питомцев: `localStorage` в рендере (ключи на слот).
 - Автозапуск применяется только в упакованном приложении (`app.isPackaged`).
 

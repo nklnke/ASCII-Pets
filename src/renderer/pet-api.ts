@@ -21,11 +21,13 @@ export interface PetApi {
   getStyle: () => Promise<string>;
   onSetStyle: (cb: (style: string) => void) => void;
   onSetColorMode: (cb: (on: boolean) => void) => void;
+  onSetShadows: (cb: (on: boolean) => void) => void;
   onSetInkColor: (cb: (inks: CellInk[]) => void) => void;
   onSetPaused: (cb: (value: boolean) => void) => void;
   getMuted: () => Promise<boolean>;
   onSetMuted: (cb: (muted: boolean) => void) => void;
   getScale: () => Promise<number>;
+  getShadows: () => Promise<boolean>;
   onSetScale: (cb: (scale: number) => void) => void;
   /** Status window: live snapshots + toast lines relayed by main. */
   onStatusUpdate: (cb: (snapshots: PetSnapshot[]) => void) => void;

@@ -29,6 +29,10 @@ let pack: string[] = ["cat"];
 let displayId: number | null = null;
 /** FPS meter row in the status window. */
 let fpsMeter = false;
+/** Text shadows + silhouette glow on the stage (renderer applies, main owns).
+ *  Default off for fresh installs; existing settings files without the field
+ *  keep the old behavior (on) so saved setups never change silently. */
+let shadows = false;
 /** Drawing style for the whole pack (ASCII1 classic / ASCII2 blocks). */
 let style: string = DEFAULT_STYLE;
 /** Floating status window (free placement, hideable). Owned by main. */
@@ -69,6 +73,7 @@ interface AppSettings {
   statusPos?: { x?: number; y?: number };
   displayId?: number | null;
   fpsMeter?: boolean;
+  shadows?: boolean;
 }
 
 function settingsPath(): string {
@@ -112,6 +117,9 @@ function loadSettings(): void {
   if (s.style !== undefined) style = normalizeStyle(s.style);
   if (s.displayId === null || typeof s.displayId === "number") displayId = s.displayId;
   if (typeof s.fpsMeter === "boolean") fpsMeter = s.fpsMeter;
+  // Missing field in an existing file = shadows were on back then: preserve.
+  if (typeof s.shadows === "boolean") shadows = s.shadows;
+  else shadows = true;
 }
 
 function saveSettings(): void {
@@ -119,7 +127,7 @@ function saveSettings(): void {
     fs.mkdirSync(path.dirname(settingsPath()), { recursive: true });
     fs.writeFileSync(
       settingsPath(),
-      JSON.stringify({ onTop, openAtLogin, pack, style, colorMode, notifyHungry, muted, petScale, showStatus, statusPos, displayId, fpsMeter }),
+      JSON.stringify({ onTop, openAtLogin, pack, style, colorMode, notifyHungry, muted, petScale, showStatus, statusPos, displayId, fpsMeter, shadows }),
     );
   } catch {
     // Settings are best-effort; the app works without them.
@@ -412,6 +420,7 @@ function settingsSnapshot(): SettingsSnapshot {
     openAtLogin,
     displayId,
     fpsMeter,
+    shadows,
   };
 }
 
@@ -476,6 +485,12 @@ function applySettings(update: SettingsUpdate): void {
     saveSettings();
     refreshTrayMenu();
     broadcastSettings();
+  }
+  if (typeof update.shadows === "boolean" && update.shadows !== shadows) {
+    shadows = update.shadows;
+    saveSettings();
+    broadcastSettings();
+    if (win && !win.isDestroyed()) win.webContents.send("set-shadows", shadows);
   }
 }
 
@@ -671,6 +686,7 @@ function createWindow(): void {
     if (!win || win.isDestroyed()) return;
     win.webContents.send("set-muted", muted);
     win.webContents.send("set-scale", petScale);
+    win.webContents.send("set-shadows", shadows);
     win.webContents.send("pet-greet");
   });
 
@@ -901,6 +917,7 @@ void app.whenReady().then(() => {
   ipcMain.handle("get-style", () => style);
   ipcMain.handle("get-muted", () => muted);
   ipcMain.handle("get-scale", () => petScale);
+  ipcMain.handle("get-shadows", () => shadows);
   ipcMain.on("pet-stats", (_event, snapshot: typeof lastStats) => {
     if (Array.isArray(snapshot)) {
       lastStats = snapshot.filter(
