@@ -10,6 +10,9 @@
 // `Y` snout, body, legs, paws. Walk frames bounce and stamp.
 // The frog (4 rows) is front-facing: `()` eye bumps, `(___)` head, mouth
 // that breathes, `\/` feet. Locomotion goes through the jump frames.
+// The bird (4 rows) is front-facing and symmetric: `(o o)` eyes, `(v)`
+// beak, folded `\/ //` wings on the perch, `\/ \/` feet. Walk frames are
+// perched idle shifts; flight goes through the jump frames (wings up/down).
 // Walk-left frames are exact mirrors of walk-right (built with mirrorFrame —
 // walk rows use only mirror-safe glyphs).
 
@@ -35,9 +38,17 @@ import {
   FROG4_JUMP,
   FROG4_SLEEP,
   FROG4_WALK_RIGHT,
+  BIRD4_BLINK,
+  BIRD4_EAT,
+  BIRD4_HAPPY,
+  BIRD4_HUNGRY,
+  BIRD4_JUMP,
+  BIRD4_SLEEP,
+  BIRD4_WALK_RIGHT,
   CAT4_COLORS,
   DOG4_COLORS,
   FROG4_COLORS,
+  BIRD4_COLORS,
   POOP4,
 } from "./ascii4-generated";
 
@@ -422,6 +433,115 @@ const FROG_JUMP: string[] = [
   ].join("\n"),
 ];
 
+// ---------------------------------------------------------------------------
+// Bird: front-facing, symmetric, 4 rows. `(o o)` eyes, `(v)` beak, folded
+// wings, `\/ \/` feet. Perches between flights (walk frames = idle shifts);
+// the jump pair is takeoff (wings up) / landing (wings spread).
+// ---------------------------------------------------------------------------
+
+const BIRD_WALK_RIGHT: string[] = [
+  [
+    "   (o o)   ",
+    "  \\( v )// ",
+    "   (___)   ",
+    "   \\/ \\/   ",
+  ].join("\n"),
+  [
+    "   (o o)   ",
+    "  \\( v )// ",
+    "   (___)   ",
+    "   \\/  \\/  ",
+  ].join("\n"),
+  [
+    "   (o o)    ",
+    "  \\( v )___ ",
+    "   (___)    ",
+    "   \\/ \\/    ",
+  ].join("\n"),
+  [
+    "    (OO)    ",
+    "   \\( v )// ",
+    "    (___)   ",
+    "    \\/ \\/   ",
+  ].join("\n"),
+];
+
+const BIRD_WALK_LEFT: string[] = BIRD_WALK_RIGHT.map(mirrorFrame);
+
+const BIRD_HAPPY: string[] = [
+  [
+    "   (^^)  <3 ",
+    "  \\( v )// ",
+    "   (___)   ",
+    "   \\/ \\/   ",
+  ].join("\n"),
+  [
+    " <3 (^^)    ",
+    "  \\( v )// ",
+    "   (___)   ",
+    "   \\/ \\/   ",
+  ].join("\n"),
+];
+
+const BIRD_HUNGRY: string[] = [
+  [
+    "   (o o) ?  ",
+    "   \\(V)//  ",
+    "   (___)   ",
+    "   (___)   ",
+  ].join("\n"),
+  [
+    "  ? (o o)   ",
+    "   \\(V)//  ",
+    "   (___)   ",
+    "    (___)  ",
+  ].join("\n"),
+];
+
+const BIRD_SLEEP: string[] = [
+  [
+    "   -- --  z ",
+    "   \\(v)z   ",
+    "   (___)   ",
+    "   \\/ \\/   ",
+  ].join("\n"),
+  [
+    "   -- -- z  ",
+    "   \\(v)z   ",
+    "   (___)   ",
+    "   \\/ \\/   ",
+  ].join("\n"),
+];
+
+const BIRD_BLINK: string = [
+  "   -- --    ",
+  "  \\( v )// ",
+  "   (___)   ",
+  "   \\/ \\/   ",
+].join("\n");
+
+const BIRD_EAT: string = [
+  "   (o o)   ",
+  "  \\(O)//  ",
+  "   (OOO)   ",
+  "   \\/ \\/   ",
+].join("\n");
+
+const BIRD_JUMP: string[] = [
+  [
+    "   (o o)   ",
+    " /// (v) \\\\\\ ",
+    "   (___)   ",
+    "    \\/     ",
+  ].join("\n"),
+  [
+    "   (OO)    ",
+    " \\( v )/  ",
+    "  (___)   ",
+    " \\/   \\/  ",
+  ].join("\n"),
+];
+
 export const SKINS: Record<string, SkinFrames> = {
   cat: {
     walkRight: CAT_WALK_RIGHT,
@@ -452,6 +572,16 @@ export const SKINS: Record<string, SkinFrames> = {
     jump: FROG_JUMP,
     blink: FROG_BLINK,
     eat: FROG_EAT,
+  },
+  bird: {
+    walkRight: BIRD_WALK_RIGHT,
+    walkLeft: BIRD_WALK_LEFT,
+    happy: BIRD_HAPPY,
+    hungry: BIRD_HUNGRY,
+    sleep: BIRD_SLEEP,
+    jump: BIRD_JUMP,
+    blink: BIRD_BLINK,
+    eat: BIRD_EAT,
   },
 };
 
@@ -828,6 +958,111 @@ const FROG2_JUMP: string[] = [
   ].join("\n"),
 ];
 
+// Bird (blocks): same perched silhouette, ▓▓ body, ◉ eyes, (v) beak.
+
+const BIRD2_WALK_RIGHT: string[] = [
+  [
+    "    (◉) (◉)    ",
+    "   ▓▓( v )▓▓   ",
+    "    _< ▓ >_    ",
+    "     ▓▓   ▓▓   ",
+  ].join("\n"),
+  [
+    "    (◉) (◉)    ",
+    "   ▓▓( v )▓▓   ",
+    "    _< ▓ >_    ",
+    "     ▓▓    ▓▓  ",
+  ].join("\n"),
+  [
+    "     (◉) (◉)   ",
+    "    ▓▓( v )▓▓  ",
+    "     _< ▓ >_   ",
+    "      ▓▓   ▓▓  ",
+  ].join("\n"),
+  [
+    "    (●) (●)    ",
+    "   ▓▓( v )▓▓   ",
+    "    _<░░░>_    ",
+    "     ▓▓   ▓▓   ",
+  ].join("\n"),
+];
+
+const BIRD2_WALK_LEFT: string[] = BIRD2_WALK_RIGHT.map(mirrorFrame);
+
+const BIRD2_HAPPY: string[] = [
+  [
+    "    (●) (●) <3",
+    "   ▓▓( v )▓▓   ",
+    "    _< ▓ >_    ",
+    "     ▓▓   ▓▓   ",
+  ].join("\n"),
+  [
+    " <3 (◉) (◉)    ",
+    "   ▓▓( v )▓▓   ",
+    "    _< ▓ >_    ",
+    "     ▓▓   ▓▓   ",
+  ].join("\n"),
+];
+
+const BIRD2_HUNGRY: string[] = [
+  [
+    "    (◉) (◉) ?  ",
+    "   ▓▓( V )▓▓   ",
+    "    _< ▓ >_    ",
+    "    (███)      ",
+  ].join("\n"),
+  [
+    "  ? (◉) (◉)    ",
+    "   ▓▓( V )▓▓   ",
+    "    _< ▓ >_    ",
+    "     (███)     ",
+  ].join("\n"),
+];
+
+const BIRD2_SLEEP: string[] = [
+  [
+    "    (─) (─)  z",
+    "   ▓▓( v )z    ",
+    "    _< ▓ >z    ",
+    "     ▓▓   ▓▓   ",
+  ].join("\n"),
+  [
+    "    (─) (─) z  ",
+    "   ▓▓( v )z    ",
+    "    _< ▓> z    ",
+    "     ▓▓   ▓▓   ",
+  ].join("\n"),
+];
+
+const BIRD2_BLINK: string = [
+  "    (─) (─)     ",
+  "   ▓▓( v )▓▓   ",
+  "    _< ▓ >_    ",
+  "     ▓▓   ▓▓   ",
+].join("\n");
+
+const BIRD2_EAT: string = [
+  "    (◉) (◉)    ",
+  "   ▓▓( O )▓▓   ",
+  "    _<OOO>_    ",
+  "     ▓▓   ▓▓   ",
+].join("\n");
+
+const BIRD2_JUMP: string[] = [
+  [
+    "░░  (◉) (◉)  ░░",
+    " ░░▓▓( v )▓▓░░ ",
+    "    _< ▓ >_    ",
+    "      ▓▓       ",
+  ].join("\n"),
+  [
+    "    (●) (●)    ",
+    "   ▓▓( O )▓▓   ",
+    "    _<░░░>_    ",
+    "  ░▓▓     ▓▓░  ",
+  ].join("\n"),
+];
+
 const SKINS_ASCII1: Record<string, SkinFrames> = SKINS;
 
 const SKINS_ASCII2: Record<string, SkinFrames> = {
@@ -860,6 +1095,16 @@ const SKINS_ASCII2: Record<string, SkinFrames> = {
     jump: FROG2_JUMP,
     blink: FROG2_BLINK,
     eat: FROG2_EAT,
+  },
+  bird: {
+    walkRight: BIRD2_WALK_RIGHT,
+    walkLeft: BIRD2_WALK_LEFT,
+    happy: BIRD2_HAPPY,
+    hungry: BIRD2_HUNGRY,
+    sleep: BIRD2_SLEEP,
+    jump: BIRD2_JUMP,
+    blink: BIRD2_BLINK,
+    eat: BIRD2_EAT,
   },
 };
 
@@ -1276,6 +1521,126 @@ const FROG3_JUMP: string[] = [
   ].join("\n"),
 ];
 
+// Bird (tamagotchi blob, 5 rows): wings out to the sides, round body.
+// Walk frames flap the wings; jump frames tuck/spread.
+
+const BIRD3_WALK_RIGHT: string[] = [
+  [
+    " ██       ██ ",
+    " ███████████ ",
+    " ███████████ ",
+    "  █████████  ",
+    "  ███   ███  ",
+  ].join("\n"),
+  [
+    " ██       ██ ",
+    " ███████████ ",
+    "█████████████",
+    " ███████████ ",
+    "  ███   ███  ",
+  ].join("\n"),
+  [
+    "  ██     ██  ",
+    "  █████████  ",
+    "  █████████  ",
+    "  █████████  ",
+    "  ████ ████  ",
+  ].join("\n"),
+  [
+    " ██       ██ ",
+    " ███████████ ",
+    " ███████████ ",
+    " ███████████ ",
+    " ████   ████ ",
+  ].join("\n"),
+];
+
+const BIRD3_WALK_LEFT: string[] = BIRD3_WALK_RIGHT.map(mirrorFrame);
+
+const BIRD3_HAPPY: string[] = [
+  [
+    " ██       ██   <3",
+    " ███████████ ",
+    "█████████████",
+    " ███████████ ",
+    "  ███   ███  ",
+  ].join("\n"),
+  [
+    "<3  ██       ██ ",
+    " ███████████ ",
+    "█████████████",
+    " ███████████ ",
+    "  ███   ███  ",
+  ].join("\n"),
+];
+
+const BIRD3_HUNGRY: string[] = [
+  [
+    " ██       ██   ?",
+    " ███████████ ",
+    " ███████████ ",
+    " ██       ██ ",
+    "  ███   ███  ",
+  ].join("\n"),
+  [
+    "?  ██       ██ ",
+    " ███████████ ",
+    " ███████████ ",
+    " ███     ███ ",
+    "  ███   ███  ",
+  ].join("\n"),
+];
+
+const BIRD3_SLEEP: string[] = [
+  [
+    " ██       ██    z",
+    " ███████████   z",
+    "█████████████",
+    "█████████████",
+    "  ███   ███  ",
+  ].join("\n"),
+  [
+    " ██       ██   z",
+    " ███████████  z",
+    "█████████████",
+    "█████████████",
+    "  ███   ███  ",
+  ].join("\n"),
+];
+
+const BIRD3_BLINK: string = [
+  " ██       ██ ",
+  " ███████████ ",
+  "█████████████",
+  "█████████████",
+  "  ███   ███  ",
+].join("\n");
+
+const BIRD3_EAT: string = [
+  " ██       ██ ",
+  " ███████████ ",
+  " ███████████ ",
+  " ██       ██ ",
+  "  ███   ███  ",
+].join("\n");
+
+const BIRD3_JUMP: string[] = [
+  [
+    "████     ████",
+    " ███████████ ",
+    " ███████████ ",
+    "  █████████  ",
+    "   ███ ███   ",
+  ].join("\n"),
+  [
+    " ██       ██ ",
+    " ███████████ ",
+    " ███████████ ",
+    "  █████████  ",
+    "███       ███",
+  ].join("\n"),
+];
+
 const SKINS_ASCII3: Record<string, SkinFrames> = {
   cat: {
     walkRight: CAT3_WALK_RIGHT,
@@ -1306,6 +1671,16 @@ const SKINS_ASCII3: Record<string, SkinFrames> = {
     jump: FROG3_JUMP,
     blink: FROG3_BLINK,
     eat: FROG3_EAT,
+  },
+  bird: {
+    walkRight: BIRD3_WALK_RIGHT,
+    walkLeft: BIRD3_WALK_LEFT,
+    happy: BIRD3_HAPPY,
+    hungry: BIRD3_HUNGRY,
+    sleep: BIRD3_SLEEP,
+    jump: BIRD3_JUMP,
+    blink: BIRD3_BLINK,
+    eat: BIRD3_EAT,
   },
 };
 
@@ -1341,6 +1716,16 @@ const SKINS_ASCII4: Record<string, SkinFrames> = {
     jump: FROG4_JUMP,
     blink: FROG4_BLINK,
     eat: FROG4_EAT,
+  },
+  bird: {
+    walkRight: BIRD4_WALK_RIGHT,
+    walkLeft: BIRD4_WALK_RIGHT.map(mirrorFrame),
+    happy: BIRD4_HAPPY,
+    hungry: BIRD4_HUNGRY,
+    sleep: BIRD4_SLEEP,
+    jump: BIRD4_JUMP,
+    blink: BIRD4_BLINK,
+    eat: BIRD4_EAT,
   },
 };
 
@@ -1389,6 +1774,20 @@ export const ASCII4_PALETTES: Record<string, Record<string, string>> = {
     "?": "#ffd97a",
     z: "#9ad7ff",
   },
+  bird: {
+    k: "#608cc8",
+    W: "#e4ecf4",
+    L: "#4268a8",
+    O: "#0a0f14",
+    N: "#e8933a",
+    D: "#1a2a3a",
+    V: "#96591e",
+    U: "#0a0f14",
+    o: "#0a0f14",
+    "-": "#0a0f14",
+    "?": "#ffd97a",
+    z: "#9ad7ff",
+  },
 };
 
 /** Parallel color-letter grids for colored styles (SKIN_STYLE_COLORS[style][skin]). */
@@ -1423,6 +1822,16 @@ export const SKIN_STYLE_COLORS: Record<string, Record<string, SkinFrames>> = {
       jump: FROG4_COLORS.jump,
       blink: FROG4_COLORS.blink,
       eat: FROG4_COLORS.eat,
+    },
+    bird: {
+      walkRight: BIRD4_COLORS.walkRight,
+      walkLeft: BIRD4_COLORS.walkRight.map(mirrorFrame),
+      happy: BIRD4_COLORS.happy,
+      hungry: BIRD4_COLORS.hungry,
+      sleep: BIRD4_COLORS.sleep,
+      jump: BIRD4_COLORS.jump,
+      blink: BIRD4_COLORS.blink,
+      eat: BIRD4_COLORS.eat,
     },
   },
 };

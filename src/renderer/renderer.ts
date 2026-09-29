@@ -78,6 +78,29 @@ const SONG_WINDOW_MS = 180_000;
 /** Floating notes: spawn rate + live cap per pet. */
 const NOTE_EVERY_MS = 320;
 const MAX_NOTES = 6;
+/** Bird level cruise speed (px/s) + acceleration cap (px/s^2, smooth turns). */
+const CRUISE_SPEED = 240;
+const FLY_ACCEL = 780;
+/** Full wingbeat cycle during flap bursts (ms); glides hold wings spread. */
+const WINGBEAT_MS = 300;
+const FLAP_BURST_MIN = 800;
+const FLAP_BURST_MAX = 1800;
+const GLIDE_MIN = 900;
+const GLIDE_MAX = 2600;
+/** Ease-off distance to the waypoint (px). */
+const ARRIVE_RADIUS = 90;
+/** Bird descent speed when forced to land (sleep/meals, px/s). */
+const LAND_SPEED = 380;
+/** Airborne stretches before the bird lands for a break (ms). */
+const FLY_TIME_MIN = 40000;
+const FLY_TIME_MAX = 70000;
+/** Perched breaks between flights (ms). */
+const PERCH_MIN = 1000;
+const PERCH_MAX = 2000;
+/** Top margin: closest the bird gets to the window top (px). */
+const FLY_TOP_MARGIN = 40;
+/** Lowest cruise altitude above the floor (px, landings go to 0). */
+const FLY_MIN_ALT = 70;
 
 /** One floor-anchored poop pile (DOM node + stink waves + position). */
 interface PoopPile {
@@ -273,6 +296,21 @@ class Pet {
   nextHopAt = 0;
   croakUntil = 0;
   nextCroak = 0;
+  // Flyer state (bird): sustained cruising flight across the whole window,
+  // with perched breaks on the floor. Hoppers (frog) keep leapStep.
+  flyMode: "perch" | "fly" = "perch";
+  /** Altitude above the floor in px (flyers only; everyone else stays 0). */
+  flyY = 0;
+  flyToX = 0;
+  flyToY = 0;
+  nextTakeoffAt = 0;
+  nextLandAt = 0;
+  /** Flight velocity (px/s) for steering with limited acceleration. */
+  flyVX = 0;
+  flyVY = 0;
+  /** Wing state in flight: flap bursts vs locked-wing glides. */
+  airPhase: "flap" | "glide" = "flap";
+  phaseUntil = 0;
   // Song state: next attempt timestamp, singing window, melody, note pacing.
   nextSongAt = 0;
   singingUntil = 0;
@@ -310,6 +348,9 @@ class Pet {
     this.nextBlink = Date.now() + 2000 + Math.random() * 3000;
     this.decideUntil = Date.now() + this.temp.decisionMinMs;
     this.nextHopAt = Date.now() + 500 + Math.random() * 1000;
+    this.flyToX = x;
+    // The bird takes off shortly after launch instead of hopping on the floor.
+    this.nextTakeoffAt = Date.now() + 1500 + Math.random() * 2500;
     this.nextCroak = Date.now() + 8000 + Math.random() * 12000;
     // Stagger debut songs so the pack doesn't choir at once.
     this.nextSongAt = Date.now() + SONG_MIN_MS + slot * 45_000 + Math.random() * 120_000;
@@ -381,11 +422,26 @@ class Pet {
   setSkin(skinId: string): void {
     if (this.skinId === skinId) return;
     this.skinId = skinId;
+    if (!this.flyer()) {
+      this.flyMode = "perch";
+      this.flyY = 0;
+    } else {
+      this.nextTakeoffAt = Date.now() + 1500 + Math.random() * 2000;
+    }
     this.shownText = null;
   }
 
   hopper(): boolean {
     return skinMoves(this.skinId) === "hop";
+  }
+
+  flyer(): boolean {
+    return skinMoves(this.skinId) === "fly";
+  }
+
+  /** Sit-and-travel pets (hoppers + flyers): perch out pauses, leap/flap instead of striding. */
+  leaper(): boolean {
+    return this.hopper() || this.flyer();
   }
 
   label(): string {
@@ -414,11 +470,11 @@ class Pet {
   startJump(heightScale = 1, anchor = true): void {
     this.jumpStart = Date.now();
     this.jumpHeight = this.temp.jumpHeight * heightScale;
-    // Hoppers travel via hopFromX -> hopToX: an external bounce (petting,
+    // Sitters travel via hopFromX -> hopToX: an external bounce (petting,
     // socials, startle) must jump in place instead of replaying a stale path
-    // (which teleported the frog across the strip). hopStep opts out because
-    // it sets a real target right before jumping.
-    if (anchor && this.hopper()) {
+    // (which teleported the frog across the strip). hopStep/flyStep opt out
+    // because they set a real target right before jumping.
+    if (anchor && this.leaper()) {
       this.hopFromX = this.x;
       this.hopToX = this.x;
     }
@@ -432,6 +488,10 @@ class Pet {
     this.dir = fromX < center ? 1 : -1;
     this.slowUntil = Date.now() + TURN_SLOW_MS;
     this.startJump(0.8);
+    // A startled bird flaps off: take off shortly after the fright.
+    if (this.flyer() && this.flyMode === "perch") {
+      this.nextTakeoffAt = Math.min(this.nextTakeoffAt, Date.now() + 400);
+    }
     playStartle(this.skinId);
     showMsg(`${this.label()}: испугался!`);
   }
@@ -472,15 +532,16 @@ class Pet {
     if (this.cv) this.cv.style.transform = t;
   }
 
-  /** Vertical glyph offset (jump arc + stride bob) for the backdrop sampler. */
+  /** Vertical glyph offset (jump arc + stride bob + flight altitude). */
   yOffset(now: number): number {
     // Lift only: feet never dip below the floor (the taskbar's top edge).
-    return this.jumpY(now) - Math.abs(Math.sin(this.bobPhase)) * this.bobAmp(now);
+    // Flyers add their cruising altitude on top of any jump arc.
+    return this.jumpY(now) - Math.abs(Math.sin(this.bobPhase)) * this.bobAmp(now) - (this.flyer() ? this.flyY : 0);
   }
 
-  /** Stride bob amplitude: hoppers/sleepers/sniffers stand still. */
+  /** Stride bob amplitude: sitters/sleepers/sniffers stand still. */
   bobAmp(now: number): number {
-    if (this.hopper() || this.sleeping() || this.sniffing(now)) return 0;
+    if (this.leaper() || this.sleeping() || this.sniffing(now)) return 0;
     const gait = this.gait === "sniff" ? "walk" : this.gait;
     // No bob at scurry pace: the whole sprite rides this sine at stride
     // frequency, and even sub-pixel amplitude reads as trembling when fast.
@@ -676,6 +737,8 @@ class Pet {
     saveStats(this.slot, this.stats);
     this.eatUntil = Date.now() + EAT_MS;
     this.happyUntil = Date.now() + EAT_MS + HAPPY_MS;
+    // Meals are ground business: the bird lands to eat.
+    this.groundBird(this.eatUntil + 2000);
     this.setFrame(this.frames().eat);
     showMsg(`${this.label()}: *nom-nom* (покормлен ${this.stats.meals})`);
     playEatSound();
@@ -789,7 +852,7 @@ class Pet {
       this.nextBlink = now; // sniff with a blink looks alive
       playSniff();
     }
-    if (roll.jump && !this.hopper()) this.startJump(0.7 + Math.random() * 0.6);
+    if (roll.jump && !this.leaper()) this.startJump(0.7 + Math.random() * 0.6);
     this.decideUntil = now + roll.durationMs;
   }
 
@@ -810,12 +873,165 @@ class Pet {
     maybePushPos(now);
   }
 
+  /** Airborne (or descending): the bird is off the floor. */
+  flying(): boolean {
+    return this.flyer() && (this.flyMode === "fly" || this.flyY > 0.5);
+  }
+
+  height(): number {
+    return this.hitEl().offsetHeight || 80;
+  }
+
+  clampY(value: number): number {
+    const max = Math.max(0, window.innerHeight - this.height() - FLY_TOP_MARGIN);
+    return Math.min(Math.max(0, value), max);
+  }
+
+  /** Highest cruise altitude: the window top minus a margin. */
+  maxAlt(): number {
+    return Math.max(0, window.innerHeight - this.height() - FLY_TOP_MARGIN);
+  }
+
+  /** Send the bird to the ground: lands (or stays) perched until `until`. */
+  groundBird(until = 0): void {
+    if (!this.flyer()) return;
+    const now = Date.now();
+    if (this.flyMode === "fly" || this.flyY > 0.5) {
+      this.flyToX = this.clampX(this.x + (Math.random() - 0.5) * 120);
+      this.flyToY = 0;
+    } else {
+      this.flyY = 0;
+    }
+    this.nextLandAt = 0;
+    this.nextTakeoffAt = Math.max(this.nextTakeoffAt, until, now + 500);
+  }
+
+  /** Takeoff: lift off smoothly into a flap burst across the window. */
+  takeOff(now: number): void {
+    this.flyMode = "fly";
+    this.flyVX = 0;
+    this.flyVY = 0;
+    this.airPhase = "flap";
+    this.phaseUntil = now + FLAP_BURST_MIN + Math.random() * (FLAP_BURST_MAX - FLAP_BURST_MIN);
+    this.pickWaypoint();
+    const tired = this.stats.energy < TIRED_AT;
+    const span = FLY_TIME_MIN + Math.random() * (FLY_TIME_MAX - FLY_TIME_MIN);
+    this.nextLandAt = now + (tired ? span * 0.5 : span);
+    // No jump parabola: velocity eases up from zero for a smooth liftoff.
+    playJump(this.skinId);
+  }
+
+  /** Random cruise target: anywhere across the window, well above the floor. */
+  pickWaypoint(): void {
+    const top = this.maxAlt();
+    const lo = Math.min(FLY_MIN_ALT, top);
+    this.flyToX = this.clampX(EDGE_MARGIN + Math.random() * Math.max(1, window.innerWidth - this.width() - EDGE_MARGIN * 2));
+    this.flyToY = lo + Math.random() * Math.max(1, top - lo);
+  }
+
+  /** One cruise frame: steer toward the waypoint with limited acceleration. */
+  cruiseStep(dt: number, now: number): void {
+    this.think(now);
+    if (this.sniffing(now)) {
+      // Hover: brake to a hold, sniff the air.
+      this.flyVX *= Math.max(0, 1 - dt * 6);
+      this.flyVY *= Math.max(0, 1 - dt * 6);
+      this.renderPosition(now);
+      maybePushPos(now);
+      return;
+    }
+    if (this.nextLandAt > 0 && now >= this.nextLandAt) {
+      // Time for a break: glide down to a nearby floor spot.
+      this.nextLandAt = 0;
+      this.flyToX = this.clampX(this.x + this.dir * (60 + Math.random() * 140));
+      this.flyToY = 0;
+    }
+    const tired = this.stats.energy < TIRED_AT;
+    const dozing = this.sleeping();
+    const maxSpeed = dozing ? LAND_SPEED : tired ? CRUISE_SPEED * 0.6 : CRUISE_SPEED;
+    const dx = this.flyToX - this.x;
+    const dy = this.flyToY - this.flyY;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 20) {
+      if (this.flyToY <= 0) {
+        // Touchdown: perch out a break before the next flight.
+        this.flyMode = "perch";
+        this.flyY = 0;
+        this.flyVX = 0;
+        this.flyVY = 0;
+        this.x = this.clampX(this.flyToX);
+        this.nextHopAt = now + 400 + Math.random() * 900;
+        this.nextTakeoffAt = Math.max(this.nextTakeoffAt, now + PERCH_MIN + Math.random() * (PERCH_MAX - PERCH_MIN));
+        this.renderPosition(now);
+        maybePushPos(now);
+        return;
+      }
+      this.pickWaypoint();
+      return;
+    }
+    // Flap-glide cycle: bursts of wingbeats, then locked-wing glides.
+    // Final approach always glides; far-below-target forces flapping.
+    const landing = this.flyToY <= 0 && this.flyY > 30;
+    if (landing) {
+      this.airPhase = "glide";
+      this.phaseUntil = now + 1000;
+    } else if (dy > 140) {
+      this.airPhase = "flap";
+      this.phaseUntil = Math.max(this.phaseUntil, now + 400);
+    } else if (now >= this.phaseUntil) {
+      if (this.airPhase === "flap") {
+        this.airPhase = "glide";
+        this.phaseUntil = now + GLIDE_MIN + Math.random() * (GLIDE_MAX - GLIDE_MIN);
+      } else {
+        this.airPhase = "flap";
+        this.phaseUntil = now + FLAP_BURST_MIN + Math.random() * (FLAP_BURST_MAX - FLAP_BURST_MIN);
+      }
+    }
+    // Desired velocity: full speed far away, eased near the target.
+    const speed = maxSpeed * Math.min(1, Math.max(dist / ARRIVE_RADIUS, 0.25));
+    const desX = (dx / dist) * speed;
+    let desY = (dy / dist) * speed;
+    if (this.airPhase === "glide") desY = Math.min(desY, 20);
+    // Limited acceleration: turns take time, no snapping around.
+    const maxDv = FLY_ACCEL * dt;
+    this.flyVX += Math.min(Math.max(desX - this.flyVX, -maxDv), maxDv);
+    this.flyVY += Math.min(Math.max(desY - this.flyVY, -maxDv), maxDv);
+    this.x = this.clampX(this.x + this.flyVX * dt);
+    this.flyY = this.clampY(this.flyY + this.flyVY * dt);
+    if (Math.abs(this.flyVX) > 10) this.dir = this.flyVX > 0 ? 1 : -1;
+    this.renderPosition(now);
+    maybePushPos(now);
+  }
+
   /** Hopper locomotion: sit out the pause, then leap to the next spot. */
   hopStep(now: number): void {
+    this.leapStep(now, 1, 1);
+  }
+
+  /** Flyer locomotion: cruise the whole window, perch on the floor for breaks. */
+  flyStep(dt: number, now: number): void {
+    // Sleep is ground business: glide down first. Hunger doesn't ground
+    // the bird anymore (it keeps flying, shivering) — only meals land it.
+    if (this.sleeping()) {
+      this.groundBird(now + 2000);
+    }
+    if (this.flyMode === "fly") {
+      this.cruiseStep(dt, now);
+      return;
+    }
+    // Perched: short flap-hops along the floor (the old leap charm).
+    this.leapStep(now, 2.2, 1.7);
+    if (now >= this.nextTakeoffAt && !this.sleeping() && !socialActive(now)) {
+      this.takeOff(now);
+    }
+  }
+
+  /** Sit-and-travel core shared by hopStep/flyStep (hoppers leap, flyers flap — neither glides). */
+  leapStep(now: number, lenMult: number, heightScale: number): void {
     this.think(now);
     if (this.sniffing(now)) return;
     if (this.jumping(now)) {
-      // Travel through the air along the parabola progress (hoppers leap, never glide).
+      // Travel through the air along the parabola progress.
       // easeOutQuad: explosive takeoff, soft landing.
       const p = Math.min(1, Math.max(0, (now - this.jumpStart) / JUMP_MS));
       const e = 1 - (1 - p) * (1 - p);
@@ -827,7 +1043,7 @@ class Pet {
     if (now < this.nextHopAt) return;
     const tired = this.stats.energy < TIRED_AT;
     const [lo, hi] = this.temp.hopLength;
-    const len = (lo + Math.random() * (hi - lo)) * (tired ? 0.5 : 1);
+    const len = (lo + Math.random() * (hi - lo)) * lenMult * (tired ? 0.5 : 1);
     let target = this.clampX(this.x + this.dir * len);
     if (Math.abs(target - this.x) < 30) {
       this.dir = this.dir === 1 ? -1 : 1;
@@ -835,7 +1051,7 @@ class Pet {
     }
     this.hopFromX = this.x;
     this.hopToX = target;
-    this.startJump(1, false);
+    this.startJump(heightScale, false);
     const [plo, phi] = this.temp.hopPause;
     const pause = plo + Math.random() * (phi - plo);
     this.nextHopAt = Date.now() + JUMP_MS + (tired ? pause * 1.8 : pause);
@@ -845,6 +1061,12 @@ class Pet {
   step(dt: number, now: number): void {
     if (dragPet === this) return;
     if (this.sleeping() && !this.jumping(now)) {
+      // A sleepy bird glides down first instead of dozing off mid-air.
+      if (this.flying()) {
+        this.groundBird(0);
+        this.cruiseStep(dt, now);
+        return;
+      }
       this.speedCur = 0;
       return;
     }
@@ -854,6 +1076,10 @@ class Pet {
     }
     if (this.hopper()) {
       this.hopStep(now);
+      return;
+    }
+    if (this.flyer()) {
+      this.flyStep(dt, now);
       return;
     }
     if (!this.sniffing(now)) {
@@ -945,11 +1171,11 @@ class Pet {
       this.setFrame(f.hungry[tick % 2]);
       return;
     }
-    // Spontaneous croak (hoppers only): open mouth for a beat.
-    if (this.hopper() && now >= this.nextCroak) {
+    // Spontaneous voice (sitters only): frog croaks, bird chirps — open beak for a beat.
+    if (this.leaper() && now >= this.nextCroak) {
       this.nextCroak = now + 15000 + Math.random() * 15000;
       this.croakUntil = now + CROAK_MS;
-      showMsg(`${this.label()}: *ква*`);
+      showMsg(`${this.label()}: ${skinSound(this.skinId)}`);
       playPetSound(this.skinId);
     }
     if (now < this.croakUntil) {
@@ -973,7 +1199,15 @@ class Pet {
     // Symmetric (front-facing) skins share one walk set for both directions:
     // mirroring flips line padding and jerks the sprite sideways on every turn.
     const frames = this.dir === 1 || skinSymmetric(this.skinId) ? f.walkRight : f.walkLeft;
-    if (this.hopper()) {
+    if (this.leaper()) {
+      if (this.flying()) {
+        // Flap bursts alternate folded/spread wings (~3 beats/s);
+        // glides (and hover-sniffs) hold them spread.
+        this.strideAcc = 0;
+        const flapping = this.airPhase === "flap" && !this.sniffing(now);
+        this.setFrame(f.jump[!flapping ? 0 : Math.floor(now / (WINGBEAT_MS / 2)) % 2]);
+        return;
+      }
       // Sitters rest: no leg-cycling on the ground (leaps use jump frames above).
       this.strideAcc = 0;
       this.setFrame(frames[0]);
@@ -1163,11 +1397,13 @@ function pickMsg(variants: string[]): string {
 function lockPet(p: Pet, until: number): void {
   p.decideUntil = until;
   p.slowUntil = 0;
+  // Flyers sit the scene out on the floor (socials are ground business).
+  p.groundBird(until);
 }
 
 /** Hold a walker in place (standing rest frame) without touching hoppers. */
 function holdWalker(p: Pet, until: number): void {
-  if (!p.hopper()) p.sniffUntil = until;
+  if (!p.leaper()) p.sniffUntil = until;
 }
 
 /** Chain another hopper leap from the current spot (no sit pause mid-scene). */
@@ -1209,7 +1445,7 @@ function startScene(kind: SocialKind, parts: Pet[], dur: number, now: number): v
       lockPet(p, until);
       holdWalker(p, until);
       p.happyUntil = until;
-      if (p.hopper()) p.nextHopAt = until;
+      if (p.leaper()) p.nextHopAt = until;
     }
     a.startJump(0.6);
     b.startJump(0.6);
@@ -1225,7 +1461,7 @@ function startScene(kind: SocialKind, parts: Pet[], dur: number, now: number): v
       p.gait = "scurry";
       lockPet(p, until);
       p.happyUntil = until;
-      if (p.hopper()) p.nextHopAt = now;
+      if (p.leaper()) p.nextHopAt = now;
       else p.sniffUntil = 0;
     }
     a.startJump(0.7);
@@ -1241,7 +1477,7 @@ function startScene(kind: SocialKind, parts: Pet[], dur: number, now: number): v
     for (const p of [a, b]) {
       lockPet(p, until);
       p.speedCur = 0;
-      if (p.hopper()) p.nextHopAt = until;
+      if (p.leaper()) p.nextHopAt = until;
       else p.sniffUntil = until;
       p.nextBlink = now + 400;
     }
@@ -1257,7 +1493,7 @@ function startScene(kind: SocialKind, parts: Pet[], dur: number, now: number): v
       lockPet(p, until);
       holdWalker(p, until);
       p.happyUntil = until;
-      if (p.hopper()) p.nextHopAt = until;
+      if (p.leaper()) p.nextHopAt = until;
     }
     a.startJump(0.5);
     b.startJump(0.5);
@@ -1273,7 +1509,7 @@ function startScene(kind: SocialKind, parts: Pet[], dur: number, now: number): v
       p.gait = "scurry";
       lockPet(p, until);
       p.happyUntil = until;
-      if (p.hopper()) p.nextHopAt = now;
+      if (p.leaper()) p.nextHopAt = now;
       else p.sniffUntil = 0;
     }
     a.startJump(0.7);
@@ -1288,7 +1524,7 @@ function startScene(kind: SocialKind, parts: Pet[], dur: number, now: number): v
     for (const p of [a, b]) {
       lockPet(p, until);
       holdWalker(p, until);
-      if (p.hopper()) p.nextHopAt = until;
+      if (p.leaper()) p.nextHopAt = until;
     }
     a.startJump(0.8);
     b.startJump(0.8);
@@ -1313,7 +1549,7 @@ function startTrioScene(kind: TrioKind, parts: Pet[], dur: number, now: number):
       lockPet(p, until);
       holdWalker(p, until);
       p.happyUntil = until;
-      if (p.hopper()) p.nextHopAt = until;
+      if (p.leaper()) p.nextHopAt = until;
     }
     for (const p of parts) p.startJump(0.6);
     social = { kind, since: now, until, nextBeat: now + 620, beat: 0, dir: 1, whooped: false, slots: parts.map((p) => p.slot) };
@@ -1328,7 +1564,7 @@ function startTrioScene(kind: TrioKind, parts: Pet[], dur: number, now: number):
       p.gait = "scurry";
       lockPet(p, until);
       p.happyUntil = until;
-      if (p.hopper()) p.nextHopAt = now;
+      if (p.leaper()) p.nextHopAt = now;
       else p.sniffUntil = 0;
     }
     for (const p of parts) p.startJump(0.7);
@@ -1357,7 +1593,7 @@ function trioStep(parts: Pet[], now: number): void {
     // Hold the march lock; the whole chain turns together at edges.
     for (const p of parts) {
       p.decideUntil = s.until;
-      if (!p.hopper()) {
+      if (!p.leaper()) {
         p.gait = "scurry";
         p.sniffUntil = 0;
       }
@@ -1372,7 +1608,7 @@ function trioStep(parts: Pet[], now: number): void {
       }
     }
     for (const p of parts) {
-      if (p.hopper() && !p.jumping(now) && now >= p.nextHopAt - 200) sceneHop(p, 1);
+      if (p.leaper() && !p.jumping(now) && now >= p.nextHopAt - 200) sceneHop(p, 1);
     }
     if (!s.whooped && now >= s.nextBeat) {
       s.whooped = true;
@@ -1469,7 +1705,7 @@ function socialStep(now: number): void {
     // Hold the scurry lock; turn together at edges; whoop halfway.
     for (const p of [a, b]) {
       p.decideUntil = s.until;
-      if (!p.hopper()) {
+      if (!p.leaper()) {
         p.gait = "scurry";
         p.sniffUntil = 0;
       }
@@ -1487,7 +1723,7 @@ function socialStep(now: number): void {
       b.slowUntil = 0;
     }
     for (const p of [a, b]) {
-      if (p.hopper() && !p.jumping(now) && now >= p.nextHopAt - 200) sceneHop(p, 1);
+      if (p.leaper() && !p.jumping(now) && now >= p.nextHopAt - 200) sceneHop(p, 1);
     }
     if (!s.whooped && now >= s.nextBeat) {
       s.whooped = true;
@@ -1497,7 +1733,7 @@ function socialStep(now: number): void {
     // Full sprint apart; hoppers chain leaps, walkers hold scurry.
     for (const p of [a, b]) {
       p.decideUntil = s.until;
-      if (!p.hopper()) {
+      if (!p.leaper()) {
         p.gait = "scurry";
         p.sniffUntil = 0;
       } else if (!p.jumping(now) && now >= p.nextHopAt - 200) {
@@ -1516,7 +1752,7 @@ function socialStep(now: number): void {
       a.dir = a.x < b.x ? -1 : 1;
       b.dir = b.x < a.x ? -1 : 1;
       for (const p of [a, b]) {
-        if (!p.hopper()) p.sniffUntil = 0;
+        if (!p.leaper()) p.sniffUntil = 0;
         p.slowUntil = 0;
       }
       playSocial("squabble", b.skinId);
@@ -1631,8 +1867,8 @@ window.addEventListener("mouseup", () => {
     thrown.dir = v > 0 ? 1 : -1;
     thrown.stats = { ...thrown.stats, energy: Math.max(0, Math.round(thrown.stats.energy - FLING_ENERGY_COST * energyDrainFor(thrown.skinId))), updatedAt: now };
     saveStats(thrown.slot, thrown.stats);
-    if (thrown.hopper()) {
-      // Hoppers can't slide: one big leap in the throw direction.
+    if (thrown.leaper()) {
+      // Sitters can't slide: one big leap/flap in the throw direction.
       thrown.hopFromX = thrown.x;
       thrown.hopToX = thrown.clampX(thrown.x + thrown.dir * Math.min(320, speed * 0.22));
       thrown.startJump(1.2, false);

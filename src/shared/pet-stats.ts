@@ -88,10 +88,11 @@ export function isResting(s: PetStats, paused: boolean): boolean {
   return paused || s.energy <= SLEEPY_AT;
 }
 
-/** Walking energy drain per skin (endurance): dog lasts longest, frog tires fast. */
+/** Walking energy drain per skin (endurance): dog lasts longest, frog tires fast, flight costs the bird dearly. */
 export function energyDrainFor(skinId: string): number {
   if (skinId === "dog") return 0.5;
   if (skinId === "frog") return 2;
+  if (skinId === "bird") return 1.5;
   return 1;
 }
 

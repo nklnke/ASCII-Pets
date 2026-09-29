@@ -21,6 +21,8 @@ const SKIN_VOICES: Record<string, SkinVoice> = {
   dog: { wave: "square", octave: 1, gain: 0.055, gapMs: 90 },
   // Deep croak, dragging envelope.
   frog: { wave: "sawtooth", octave: 0.5, gain: 0.075, gapMs: 60 },
+  // Bright chirp, high and quick.
+  bird: { wave: "triangle", octave: 4, gain: 0.06, gapMs: 50 },
 };
 
 export function voiceFor(skinId: string): SkinVoice {
@@ -52,6 +54,11 @@ const SONGS: Record<string, Song[]> = {
     { name: "Болотная ария", notes: [[0, 2], [-5, 1], [-7, 2], [-5, 1], [0, 2]] },
     { name: "Ква-канон", notes: [[0, 1], [0, 1], [0, 1], [-2, 1], [0, 2]] },
     { name: "Ночная серенада", notes: [[-12, 2], [-7, 1], [-5, 1], [-7, 2], [0, 2]] },
+  ],
+  bird: [
+    { name: "Утренняя трель", notes: [[12, 1], [16, 1], [19, 1], [16, 1], [12, 1], [7, 2]] },
+    { name: "Чик-чирик", notes: [[12, 1], [12, 1], [17, 1], [12, 1], [19, 2]] },
+    { name: "Полёт", notes: [[7, 1], [12, 1], [16, 2], [19, 1], [24, 2]] },
   ],
 };
 

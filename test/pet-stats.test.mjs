@@ -94,6 +94,7 @@ describe("pet-stats", () => {
     assert.equal(energyDrainFor("dog"), 0.5);
     assert.equal(energyDrainFor("cat"), 1);
     assert.equal(energyDrainFor("frog"), 2);
+    assert.equal(energyDrainFor("bird"), 1.5);
     assert.equal(energyDrainFor("unknown-skin"), 1);
     const s = { ...createInitialStats(0), energy: 50 };
     const dog = tickStats(s, 10, false, 600_000, energyDrainFor("dog"));

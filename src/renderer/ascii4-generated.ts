@@ -154,4 +154,55 @@ export const FROG4_COLORS = {
   eat: "..OO....OO..\n.kkkkkkkkkk.\n.kkOVVVVOkk.\n.kkkkkkkkkk.\n..kkkkkkkk..\n.kWk....kWk.",
 };
 
+export const BIRD4_WALK_RIGHT: string[] = [
+  "   ██████   \n ██████████ \n ███●●●████ \n  ████████  \n  ████████  \n  ███  ███  ",
+  "████████████\n ██████████ \n ███●●●████ \n  ████████  \n  ████████  \n  ███  ███  ",
+  "   ██████   \n ██████████ \n ███●●●████ \n  ████████  \n  ████████  \n  ███  ███  ",
+  "   ██████   \n ██████████ \n ███●●●████ \n  ████████  \n  ████████  \n  ███  ███  ",
+];
+export const BIRD4_HAPPY: string[] = [
+  "   ██████   \n █UU████UU█ \n ███●█●████ \n████████████\n  ████████  \n  ███  ███  ",
+  "   ██████   \n █UU████UU█ \n ███●█●████ \n  ████████  \n  ████████  \n  ███  ███  ",
+];
+export const BIRD4_HUNGRY: string[] = [
+  "   ██████   \n █oo█████oo█ \n ███●●●████  ?\n  ████████  \n  ████████  \n  ███  ███  ",
+  "   ██████   \n █oo█████oo█ \n ███●●●████   ?\n  ████████  \n  ████████  \n  ███  ███  ",
+];
+export const BIRD4_SLEEP: string[] = [
+  "   ██████    z\n █--████--█ \n ███●●●████ \n  ████████  \n  ████████  \n  ███  ███  ",
+  "   ██████     z\n █--████--█ \n ███●●●████ \n  ████████  \n  ████████  \n  ███  ███  ",
+];
+export const BIRD4_JUMP: string[] = [
+  "   ██████   \n ██████████ \n ███●●●████ \n████████████\n  ████████  \n  ███  ███  ",
+  "   ██████   \n ██████████ \n ███●●●████ \n  ████████  \n  ████████  \n  ███  ███  ",
+];
+export const BIRD4_BLINK: string = "   ██████   \n █--████--█ \n ███●●●████ \n  ████████  \n  ████████  \n  ███  ███  ";
+export const BIRD4_EAT: string = "   ██████   \n ██████████ \n ███●██●███ \n  ████████  \n  ████████  \n  ███  ███  ";
+export const BIRD4_COLORS = {
+  walkRight: [
+    "...kkkkkk...\n.kOOkkkkOOk.\n.LkkNNNkkkL.\n..LkkkkkkL..\n..kkkkkkkk..\n..kWk..kWk..",
+    "LLLkkkkkkLLL\n.kOOkkkkOOk.\n.kkkNNNkkkk.\n..kkkkkkkk..\n..kkkkkkkk..\n..kWk..kWk..",
+    "...kkkkkk...\n.kOOkkkkOOk.\n.LkkNNNkkkL.\n..LkkkkkkL..\n..kkkkkkkk..\n..kWk..kWk..",
+    "...kkkkkk...\n.kOOkkkkOOk.\n.LkkNNNkkkL.\n..LkkkkkkL..\n..kkkkkkkk..\n..kLk..kWk..",
+  ],
+  happy: [
+    "...kkkkkk...\n.kUUkkkkUUk.\n.LkkNVNkkkL.\nLLLkkkkkkLLL\n..kkkkkkkk..\n..kWk..kWk..",
+    "...kkkkkk...\n.kUUkkkkUUk.\n.LkkNVNkkkL.\n..LkkkkkkL..\n..kkkkkkkk..\n..kWk..kWk..",
+  ],
+  hungry: [
+    "...kkkkkk...\n.kookkkkkook.\n.LkkNNNkkkL. ?\n..LkkkkkkL..\n..kkkkkkkk..\n..kWk..kWk..",
+    "...kkkkkk...\n.kookkkkkook.\n.LkkNNNkkkL.  ?\n..LkkkkkkL..\n..kkkkkkkk..\n..kWk..kWk..",
+  ],
+  sleep: [
+    "...kkkkkk... z\n.k--kkkk--k.\n.LkkNNNkkkL.\n..LkkkkkkL..\n..kkkkkkkk..\n..kWk..kWk..",
+    "...kkkkkk...  z\n.k--kkkk--k.\n.LkkNNNkkkL.\n..LkkkkkkL..\n..kkkkkkkk..\n..kWk..kWk..",
+  ],
+  jump: [
+    "...kkkkkk...\n.kOOkkkkOOk.\n.LkkNNNkkkL.\nLLLkkkkkkLLL\n..kkkkkkkk..\n..kWk..kWk..",
+    "...kkkkkk...\n.kOOkkkkOOk.\n.LkkNNNkkkL.\n..LkkkkkkL..\n..kkkkkkkk..\n..kWk..kWk..",
+  ],
+  blink: "...kkkkkk...\n.k--kkkk--k.\n.LkkNNNkkkL.\n..LkkkkkkL..\n..kkkkkkkk..\n..kWk..kWk..",
+  eat: "...kkkkkk...\n.kOOkkkkOOk.\n.LkkNVVNkkL.\n..LkkkkkkL..\n..kkkkkkkk..\n..kWk..kWk..",
+};
+
 export const POOP4: string = "    ████    \n  ████████  \n████████████";

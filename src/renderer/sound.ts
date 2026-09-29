@@ -1,5 +1,5 @@
 // WebAudio synth for pet sounds — no assets, no Node, no DOM except AudioContext.
-// Each skin keeps its voice: cat purrs, dog barks, frog croaks.
+// Each skin keeps its voice: cat purrs, dog barks, frog croaks, bird chirps.
 import { SONG_BEAT_MS, songFor, voiceFor } from "../shared/songs";
 // Event SFX (jump/step/clean/startle/...) are synthesized too; all of them
 // respect the global mute flag owned by main (tray menu "Звук").
@@ -94,6 +94,11 @@ function voice(skinId: string, delayBaseMs: number): void {
     // *ква*: low croak wobble
     tone(110, 180, "sawtooth", delayBaseMs, 0.11);
     tone(90, 200, "sawtooth", delayBaseMs + 200, 0.11);
+  } else if (skinId === "bird") {
+    // *чик*: bright chirp triplet
+    tone(1400, 70, "triangle", delayBaseMs, 0.07);
+    tone(1750, 70, "triangle", delayBaseMs + 90, 0.07);
+    tone(1550, 90, "triangle", delayBaseMs + 180, 0.06);
   } else {
     // *mur*: soft purr — three low hums
     tone(95, 150, "sine", delayBaseMs, 0.13);
@@ -102,7 +107,7 @@ function voice(skinId: string, delayBaseMs: number): void {
   }
 }
 
-/** Play the voice of a skin id (cat|dog|frog, fallback purr). */
+/** Play the voice of a skin id (cat|dog|frog|bird, fallback purr). */
 export function playPetSound(skinId: string): void {
   if (muted) return;
   voice(skinId, 0);
@@ -131,6 +136,8 @@ export function playJump(skinId: string): void {
     sweep(200, 430, 150, "square", 0, 0.06);
   } else if (skinId === "frog") {
     sweep(140, 320, 200, "sawtooth", 0, 0.09);
+  } else if (skinId === "bird") {
+    sweep(900, 1900, 180, "triangle", 0, 0.07);
   } else {
     sweep(250, 540, 180, "sine", 0, 0.1);
   }
@@ -164,6 +171,9 @@ export function playStartle(skinId: string): void {
   } else if (skinId === "frog") {
     tone(300, 120, "sawtooth", 0, 0.1);
     tone(200, 130, "sawtooth", 120, 0.1);
+  } else if (skinId === "bird") {
+    tone(1800, 70, "triangle", 0, 0.07);
+    tone(1200, 90, "triangle", 80, 0.07);
   } else {
     tone(700, 90, "square", 0, 0.07);
     tone(500, 110, "square", 100, 0.07);
@@ -225,6 +235,10 @@ export function playAnnoyed(skinId: string): void {
   } else if (skinId === "frog") {
     tone(70, 300, "sawtooth", 0, 0.1);
     tone(55, 250, "sawtooth", 120, 0.09);
+  } else if (skinId === "bird") {
+    tone(1600, 80, "square", 0, 0.05);
+    tone(1300, 80, "square", 90, 0.05);
+    tone(1500, 100, "square", 180, 0.05);
   } else {
     // *фшш*: cat hiss — noisy high slide down
     sweep(2500, 1200, 250, "sawtooth", 0, 0.045);

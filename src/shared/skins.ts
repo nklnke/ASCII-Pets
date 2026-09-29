@@ -1,7 +1,7 @@
 // Skin registry metadata (no art — art lives in renderer/ascii.ts).
 // Pure and testable; main uses it for menu labels, renderer maps id -> frames.
 
-export type Locomotion = "walk" | "hop";
+export type Locomotion = "walk" | "hop" | "fly";
 
 export interface SkinMeta {
   id: string;
@@ -16,6 +16,7 @@ export const SKIN_LIST: SkinMeta[] = [
   { id: "cat", name: "Кот", moves: "walk", petSound: "*mur*", symmetric: false },
   { id: "dog", name: "Пёс", moves: "walk", petSound: "*гав*", symmetric: true },
   { id: "frog", name: "Лягушка", moves: "hop", petSound: "*ква*", symmetric: true },
+  { id: "bird", name: "Птица", moves: "fly", petSound: "*чик*", symmetric: true },
 ];
 
 export const DEFAULT_SKIN = "cat";

@@ -1,17 +1,18 @@
 """Pixel-art frames for the ASCII4 ("pixel") drawing style + PNG icons.
 
 Single source of truth for the new look: palette-letter grids for every
-pet pose (cat/dog/frog) and the poop pile. Two outputs:
+pet pose (cat/dog/frog/bird) and the poop pile. Two outputs:
 
 1.  src/renderer/ascii4-generated.ts — text frames (full-block glyphs only)
     plus parallel COLORS tables (palette letter per cell) for the fixed
     per-glyph palettes in src/renderer/ascii.ts.
-2.  assets/pixel-{cat,dog,frog,poop}.png — icons for all characters/items.
+2.  assets/pixel-{cat,dog,frog,bird,poop}.png — icons for all characters/items.
 
 Rules: every filled cell is a full block (no half-shades); color comes
 from the letter tables, never from the glyph. Silhouettes differ strongly:
 cat = tall pointy ears + whiskers + slim body (12x7), dog = floppy ears +
-big snout + stocky body (12x8), frog = top eyes + wide mouth (12x6).
+big snout + stocky body (12x8), frog = top eyes + wide mouth (12x6),
+bird = round body + side wings + beak (12x6).
 
 Grid rules (mirror test/skins.test.mjs): per skin-style all frames share one
 native height (2..8 rows), every line holds a non-space glyph (no blank
@@ -59,6 +60,7 @@ SKIN_RGB = {
     "cat": {"k": (23, 23, 29), "W": (242, 242, 247), "L": (38, 38, 46), "V": (107, 58, 77)},
     "dog": {"k": (232, 130, 58), "W": (255, 217, 160), "L": (221, 122, 51), "V": (122, 46, 20)},
     "frog": {"k": (46, 230, 107), "W": (201, 245, 208), "L": (53, 179, 86), "V": (20, 83, 45)},
+    "bird": {"k": (96, 140, 200), "W": (228, 236, 244), "L": (66, 104, 168), "V": (150, 90, 30)},
     "poop": {"k": (150, 100, 60)},
 }
 RGB_BASE = {
@@ -242,6 +244,59 @@ FROG_JUMP = [
 FROG_BLINK = frame(FROG_EYES["sleep"] + FROG_HEAD + FROG_MOUTH["normal"] + FROG_HEAD + FROG_BODY + FROG_FEET["down"])
 FROG_EAT = frame(FROG_EYES["eat"] + FROG_HEAD + FROG_MOUTH["eat"] + FROG_HEAD + FROG_BODY + FROG_FEET["down"])
 
+# ---------------------------------------------------------------------------
+# Bird: round body, side wings, beak. 12x6.
+# ---------------------------------------------------------------------------
+BIRD_EYES = {
+    "normal": [".kOOkkkkOOk."],
+    "happy": [".kUUkkkkUUk."],
+    "hungry": [".kookkkkkook."],
+    "sleep": [".k--kkkk--k."],
+    "eat": [".kOOkkkkOOk."],
+}
+BIRD_HEAD = ["...kkkkkk..."]
+BIRD_BEAK = {
+    "normal": [".LkkNNNkkkL."],
+    "happy": [".LkkNVNkkkL."],
+    "eat": [".LkkNVVNkkL."],
+}
+BIRD_WINGS_UP = ["LLLkkkkkkLLL"]
+BIRD_BODY = ["..kkkkkkkk.."]
+BIRD_WINGS_MID = ["..LkkkkkkL.."]
+BIRD_FEET = {
+    "down": ["..kWk..kWk.."],
+    "left": ["..kLk..kWk.."],
+    "tuck": ["...kkkkkk..."],
+}
+
+BIRD_WALK = [
+    frame(BIRD_HEAD + BIRD_EYES["normal"] + BIRD_BEAK["normal"] + BIRD_WINGS_MID + BIRD_BODY + BIRD_FEET["down"]),
+    frame(BIRD_WINGS_UP + BIRD_EYES["normal"] + [".kkkNNNkkkk."] + BIRD_BODY + BIRD_BODY + BIRD_FEET["down"]),
+    frame(BIRD_HEAD + BIRD_EYES["normal"] + BIRD_BEAK["normal"] + BIRD_WINGS_MID + BIRD_BODY + BIRD_FEET["down"]),
+    frame(BIRD_HEAD + BIRD_EYES["normal"] + BIRD_BEAK["normal"] + BIRD_WINGS_MID + BIRD_BODY + BIRD_FEET["left"]),
+]
+BIRD_HAPPY = [
+    frame(BIRD_HEAD + BIRD_EYES["happy"] + BIRD_BEAK["happy"] + BIRD_WINGS_UP + BIRD_BODY + BIRD_FEET["down"]),
+    frame(BIRD_HEAD + BIRD_EYES["happy"] + BIRD_BEAK["happy"] + BIRD_WINGS_MID + BIRD_BODY + BIRD_FEET["down"]),
+]
+BIRD_HUNGRY = [
+    frame(BIRD_HEAD + BIRD_EYES["hungry"] + [BIRD_BEAK["normal"][0] + " ?"] + BIRD_WINGS_MID + BIRD_BODY + BIRD_FEET["down"]),
+    frame(BIRD_HEAD + BIRD_EYES["hungry"] + [BIRD_BEAK["normal"][0] + "  ?"] + BIRD_WINGS_MID + BIRD_BODY + BIRD_FEET["down"]),
+]
+BIRD_SLEEP = [
+    frame([BIRD_HEAD[0] + " z"] + BIRD_EYES["sleep"] + BIRD_BEAK["normal"] + BIRD_WINGS_MID + BIRD_BODY + BIRD_FEET["down"]),
+    frame([BIRD_HEAD[0] + "  z"] + BIRD_EYES["sleep"] + BIRD_BEAK["normal"] + BIRD_WINGS_MID + BIRD_BODY + BIRD_FEET["down"]),
+]
+# Flight pair: head/eyes/beak/body/feet are identical in both frames — only
+# the wing row moves (spread vs folded), so the body never throbs mid-flap.
+# Frame 0 (spread) doubles as the locked-wing glide pose.
+BIRD_JUMP = [
+    frame(BIRD_HEAD + BIRD_EYES["normal"] + BIRD_BEAK["normal"] + BIRD_WINGS_UP + BIRD_BODY + BIRD_FEET["down"]),
+    frame(BIRD_HEAD + BIRD_EYES["normal"] + BIRD_BEAK["normal"] + BIRD_WINGS_MID + BIRD_BODY + BIRD_FEET["down"]),
+]
+BIRD_BLINK = frame(BIRD_HEAD + BIRD_EYES["sleep"] + BIRD_BEAK["normal"] + BIRD_WINGS_MID + BIRD_BODY + BIRD_FEET["down"])
+BIRD_EAT = frame(BIRD_HEAD + BIRD_EYES["eat"] + BIRD_BEAK["eat"] + BIRD_WINGS_MID + BIRD_BODY + BIRD_FEET["down"])
+
 POOP = [
     "....kkkk....",
     "..kkkkkkkk..",
@@ -252,6 +307,7 @@ SKINS = {
     "cat": {"walk": CAT_WALK, "happy": CAT_HAPPY, "hungry": CAT_HUNGRY, "sleep": CAT_SLEEP, "jump": CAT_JUMP, "blink": CAT_BLINK, "eat": CAT_EAT},
     "dog": {"walk": DOG_WALK, "happy": DOG_HAPPY, "hungry": DOG_HUNGRY, "sleep": DOG_SLEEP, "jump": DOG_JUMP, "blink": DOG_BLINK, "eat": DOG_EAT},
     "frog": {"walk": FROG_WALK, "happy": FROG_HAPPY, "hungry": FROG_HUNGRY, "sleep": FROG_SLEEP, "jump": FROG_JUMP, "blink": FROG_BLINK, "eat": FROG_EAT},
+    "bird": {"walk": BIRD_WALK, "happy": BIRD_HAPPY, "hungry": BIRD_HUNGRY, "sleep": BIRD_SLEEP, "jump": BIRD_JUMP, "blink": BIRD_BLINK, "eat": BIRD_EAT},
 }
 
 

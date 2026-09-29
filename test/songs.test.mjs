@@ -10,7 +10,7 @@ import {
 
 describe("songs", () => {
   it("every known skin owns at least two singable melodies", () => {
-    for (const skin of ["cat", "dog", "frog"]) {
+    for (const skin of ["cat", "dog", "frog", "bird"]) {
       const list = songsFor(skin);
       assert.ok(list.length >= 2, skin);
       for (const song of list) {
@@ -21,7 +21,7 @@ describe("songs", () => {
   });
 
   it("notes stay in a sane vocal range with sane lengths", () => {
-    for (const skin of ["cat", "dog", "frog"]) {
+    for (const skin of ["cat", "dog", "frog", "bird"]) {
       for (const song of songsFor(skin)) {
         for (const [semi, beats] of song.notes) {
           assert.ok(semi >= -24 && semi <= 24, `${skin}/${song.name}: ${semi}`);
@@ -34,9 +34,9 @@ describe("songs", () => {
   it("playback lasts a couple of seconds, voices differ per skin", () => {
     const cat = songDurationMs("cat", 0);
     assert.ok(cat >= 1500 && cat <= 6000, String(cat));
-    const waves = new Set(["cat", "dog", "frog"].map((s) => voiceFor(s).wave));
-    assert.equal(waves.size, 3);
-    for (const skin of ["cat", "dog", "frog"]) {
+    const waves = new Set(["cat", "dog", "frog", "bird"].map((s) => voiceFor(s).wave));
+    assert.equal(waves.size, 4);
+    for (const skin of ["cat", "dog", "frog", "bird"]) {
       const v = voiceFor(skin);
       assert.ok(v.gain > 0 && v.gain <= 0.2);
       assert.ok(v.gapMs >= 0);

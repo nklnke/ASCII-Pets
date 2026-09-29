@@ -32,6 +32,7 @@ describe("skins", () => {
     assert.equal(skinName("cat"), "Кот");
     assert.equal(skinName("dog"), "Пёс");
     assert.equal(skinName("frog"), "Лягушка");
+    assert.equal(skinName("bird"), "Птица");
   });
 
   it("normalizes the pack-wide drawing style", () => {
