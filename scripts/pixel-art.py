@@ -53,7 +53,7 @@ GLYPH = {
     "V": FULL,
 }
 
-TEXT_GLYPHS = set("Uo-?z")
+TEXT_GLYPHS = set("Uo-?zZ")
 
 # Palette letters -> RGB for the PNG icons (per skin fur).
 SKIN_RGB = {
@@ -74,6 +74,7 @@ RGB_BASE = {
     "-": (10, 10, 14, 255),
     "?": (255, 217, 122, 255),
     "z": (154, 215, 255, 255),
+    "Z": (154, 215, 255, 255),
 }
 
 
@@ -126,7 +127,7 @@ CAT_HUNGRY = [
 ]
 CAT_SLEEP = [
     frame([CAT_EARS[0] + " z"] + [CAT_EARS[1]] + CAT_HEAD + CAT_FACE["sleep"] + CAT_MUZZLE["normal"] + CAT_BODY + CAT_LEGS["down"]),
-    frame([CAT_EARS[0] + "  z"] + [CAT_EARS[1]] + CAT_HEAD + CAT_FACE["sleep"] + CAT_MUZZLE["normal"] + CAT_BODY + CAT_LEGS["down"]),
+    frame([CAT_EARS[0] + "  Z"] + [CAT_EARS[1]] + CAT_HEAD + CAT_FACE["sleep"] + CAT_MUZZLE["normal"] + CAT_BODY + CAT_LEGS["down"]),
 ]
 CAT_JUMP = [
     frame(CAT_EARS + CAT_HEAD + CAT_FACE["happy"] + CAT_MUZZLE["happy"] + CAT_BODY + CAT_LEGS["tuck"]),
@@ -186,7 +187,7 @@ DOG_HUNGRY = [
 ]
 DOG_SLEEP = [
     frame([DOG_EARS[0] + " z"] + [DOG_EARS[1]] + DOG_HEAD + DOG_FACE["sleep"] + DOG_SNOUT["normal"] + DOG_MID["normal"] + DOG_BODY + DOG_LEGS["down"]),
-    frame([DOG_EARS[0] + "  z"] + [DOG_EARS[1]] + DOG_HEAD + DOG_FACE["sleep"] + DOG_SNOUT["normal"] + DOG_MID["normal"] + DOG_BODY + DOG_LEGS["down"]),
+    frame([DOG_EARS[0] + "  Z"] + [DOG_EARS[1]] + DOG_HEAD + DOG_FACE["sleep"] + DOG_SNOUT["normal"] + DOG_MID["normal"] + DOG_BODY + DOG_LEGS["down"]),
 ]
 DOG_JUMP = [
     frame(DOG_EARS + DOG_HEAD + DOG_FACE["happy"] + DOG_SNOUT["happy"] + DOG_MID["happy"] + DOG_BODY + DOG_LEGS["tuck"]),
@@ -214,8 +215,7 @@ FROG_MOUTH = {
 FROG_BODY = ["..kkkkkkkk.."]
 FROG_FEET = {
     "down": [".kWk....kWk."],
-    "left": [".kLk....kWk."],
-    "right": [".kWk....kLk."],
+    "outer": [".Wkk....kkW."],
     "tuck": ["...kkkkkk..."],
 }
 
@@ -227,15 +227,15 @@ FROG_WALK = [
 ]
 FROG_HAPPY = [
     frame(FROG_EYES["happy"] + FROG_HEAD + FROG_MOUTH["happy"] + FROG_HEAD + FROG_BODY + FROG_FEET["down"]),
-    frame(FROG_EYES["happy"] + FROG_HEAD + FROG_MOUTH["happy"] + FROG_HEAD + FROG_BODY + FROG_FEET["left"]),
+    frame(FROG_EYES["happy"] + FROG_HEAD + FROG_MOUTH["happy"] + FROG_HEAD + FROG_BODY + FROG_FEET["outer"]),
 ]
 FROG_HUNGRY = [
     frame(FROG_EYES["hungry"] + [FROG_HEAD[0] + " ?"] + FROG_MOUTH["normal"] + FROG_HEAD + FROG_BODY + FROG_FEET["down"]),
-    frame(FROG_EYES["hungry"] + [FROG_HEAD[0] + "  ?"] + FROG_MOUTH["normal"] + FROG_HEAD + FROG_BODY + FROG_FEET["left"]),
+    frame(FROG_EYES["hungry"] + [FROG_HEAD[0] + "  ?"] + FROG_MOUTH["normal"] + FROG_HEAD + FROG_BODY + FROG_FEET["outer"]),
 ]
 FROG_SLEEP = [
     frame([FROG_EYES["sleep"][0] + " z"] + FROG_HEAD + FROG_MOUTH["normal"] + FROG_HEAD + FROG_BODY + FROG_FEET["down"]),
-    frame([FROG_EYES["sleep"][0] + "  z"] + FROG_HEAD + FROG_MOUTH["normal"] + FROG_HEAD + FROG_BODY + FROG_FEET["down"]),
+    frame([FROG_EYES["sleep"][0] + "  Z"] + FROG_HEAD + FROG_MOUTH["normal"] + FROG_HEAD + FROG_BODY + FROG_FEET["down"]),
 ]
 FROG_JUMP = [
     frame(FROG_EYES["happy"] + FROG_HEAD + FROG_MOUTH["happy"] + FROG_HEAD + FROG_BODY + FROG_FEET["tuck"]),
@@ -285,7 +285,7 @@ BIRD_HUNGRY = [
 ]
 BIRD_SLEEP = [
     frame([BIRD_HEAD[0] + " z"] + BIRD_EYES["sleep"] + BIRD_BEAK["normal"] + BIRD_WINGS_MID + BIRD_BODY + BIRD_FEET["down"]),
-    frame([BIRD_HEAD[0] + "  z"] + BIRD_EYES["sleep"] + BIRD_BEAK["normal"] + BIRD_WINGS_MID + BIRD_BODY + BIRD_FEET["down"]),
+    frame([BIRD_HEAD[0] + "  Z"] + BIRD_EYES["sleep"] + BIRD_BEAK["normal"] + BIRD_WINGS_MID + BIRD_BODY + BIRD_FEET["down"]),
 ]
 # Flight pair: head/eyes/beak/body/feet are identical in both frames — only
 # the wing row moves (spread vs folded), so the body never throbs mid-flap.

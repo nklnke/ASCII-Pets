@@ -155,7 +155,7 @@ const CAT_SLEEP: string[] = [
     "~ \\(__)|_|  ",
   ].join("\n"),
   [
-    "  \\    /\\ z ",
+    "  \\    /\\ Z ",
     "   )  ( -)z  ",
     "  (  /  )z   ",
     "  \\(__)|_|  ",
@@ -280,7 +280,7 @@ const DOG_SLEEP: string[] = [
     "|__o___o___| ",
   ].join("\n"),
   [
-    "  /^ ^\\   z  ",
+    "  /^ ^\\   Z  ",
     " / -.- \\ z   ",
     "  \\_Y_/ z    ",
     " __________  ",
@@ -397,7 +397,7 @@ const FROG_SLEEP: string[] = [
     "     \\/   \\/   ",
   ].join("\n"),
   [
-    "     -- -- z  ",
+    "     -- -- Z  ",
     "   .-(___)-z   ",
     "    _<   z>    ",
     "     \\/   \\/   ",
@@ -506,7 +506,7 @@ const BIRD_SLEEP: string[] = [
     "   \\/ \\/   ",
   ].join("\n"),
   [
-    "   -- -- z  ",
+    "   -- -- Z  ",
     "   \\(v)z   ",
     "   (___)   ",
     "   \\/ \\/   ",
@@ -688,7 +688,7 @@ const CAT2_SLEEP: string[] = [
     "~ ▓(__)|_|  ",
   ].join("\n"),
   [
-    "  ▲    ▲ z   ",
+    "  ▲    ▲ Z   ",
     "   )  (─)z   ",
     "  ( ▓▓▓ )z   ",
     "  ▓(__)|_|  ",
@@ -809,7 +809,7 @@ const DOG2_SLEEP: string[] = [
     "▓▓▓▓▓▓▓▓▓   ",
   ].join("\n"),
   [
-    "  ▲   ▲  z   ",
+    "  ▲   ▲  Z   ",
     " ( ─ ─ ) z   ",
     "  ░░░░░ z    ",
     " ▓▓▓▓▓▓▓▓    ",
@@ -922,7 +922,7 @@ const FROG2_SLEEP: string[] = [
     "     ▓▓   ▓▓   ",
   ].join("\n"),
   [
-    "    (─) (─) z  ",
+    "    (─) (─) Z  ",
     "   ▓▓(───)z    ",
     "    _< ░> z    ",
     "     ▓▓   ▓▓   ",
@@ -1027,7 +1027,7 @@ const BIRD2_SLEEP: string[] = [
     "     ▓▓   ▓▓   ",
   ].join("\n"),
   [
-    "    (─) (─) z  ",
+    "    (─) (─) Z  ",
     "   ▓▓( v )z    ",
     "    _< ▓> z    ",
     "     ▓▓   ▓▓   ",
@@ -1199,7 +1199,7 @@ const CAT3_SLEEP: string[] = [
     "████ ██ ██ ████",
   ].join("\n"),
   [
-    "███         ███ z",
+    "███         ███ Z",
     "███████████████z",
     "███████████████",
     "███████████████",
@@ -1348,7 +1348,7 @@ const DOG3_SLEEP: string[] = [
     "█████     █████",
   ].join("\n"),
   [
-    "███         ███ z",
+    "███         ███ Z",
     "████       ████z",
     "███████████████",
     "███████████████",
@@ -1480,7 +1480,7 @@ const FROG3_SLEEP: string[] = [
     "███ █████ ███",
   ].join("\n"),
   [
-    " ███     ███  z",
+    " ███     ███  Z",
     "█████████████ z",
     "█████████████",
     "█████████████",
@@ -1600,7 +1600,7 @@ const BIRD3_SLEEP: string[] = [
     "  ███   ███  ",
   ].join("\n"),
   [
-    " ██       ██   z",
+    " ██       ██   Z",
     " ███████████  z",
     "█████████████",
     "█████████████",
@@ -1745,6 +1745,7 @@ export const ASCII4_PALETTES: Record<string, Record<string, string>> = {
     "-": "#f5f5f5",
     "?": "#ffd97a",
     z: "#9ad7ff",
+    Z: "#9ad7ff",
   },
   dog: {
     k: "#e8823a",
@@ -1759,6 +1760,7 @@ export const ASCII4_PALETTES: Record<string, Record<string, string>> = {
     "-": "#2a1508",
     "?": "#ffd97a",
     z: "#9ad7ff",
+    Z: "#9ad7ff",
   },
   frog: {
     k: "#2ee66b",
@@ -1773,6 +1775,7 @@ export const ASCII4_PALETTES: Record<string, Record<string, string>> = {
     "-": "#061206",
     "?": "#ffd97a",
     z: "#9ad7ff",
+    Z: "#9ad7ff",
   },
   bird: {
     k: "#608cc8",
@@ -1787,6 +1790,7 @@ export const ASCII4_PALETTES: Record<string, Record<string, string>> = {
     "-": "#0a0f14",
     "?": "#ffd97a",
     z: "#9ad7ff",
+    Z: "#9ad7ff",
   },
 };
 

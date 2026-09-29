@@ -122,6 +122,9 @@ interface PoopPile {
 /** Pile ink (dark brown heap). */
 const POOP_INK = "#7a4a1e";
 
+/** Happy-frame hearts ("<3") always glow pink instead of the sampled ink. */
+const HEART_INK = "#ff6b9d";
+
 /** A poop dropped mid-flight, falling to the floor with gravity. */
 interface FallingPoop {
   el: HTMLCanvasElement;
@@ -395,6 +398,8 @@ class Pet {
   gridH = 0;
   cellSpans: Array<HTMLSpanElement | null> = [];
   cellMask: boolean[] = [];
+  /** Row-major heart flags: "<3" cells glow pink (never sampled ink). */
+  heartMask: boolean[] = [];
   /** Speech bubble above the head (pet sounds, chat). */
   bubble: HTMLDivElement;
   bubbleUntil = 0;
@@ -663,6 +668,18 @@ class Pet {
     this.colorGrid = styleColored(style) ? this.colorGridFor(text) : null;
     const grid = frameCells(text);
     const rows = text.split("\n");
+    // Hearts ("<3", two cells) glow pink — mark them for paintInk.
+    const hearts: boolean[] = new Array(grid.w * grid.h).fill(false);
+    for (let r = 0; r < grid.h; r++) {
+      const row = rows[r] ?? "";
+      for (let c = 0; c + 1 < grid.w; c++) {
+        if (row[c] === "<" && row[c + 1] === "3") {
+          hearts[r * grid.w + c] = true;
+          hearts[r * grid.w + c + 1] = true;
+        }
+      }
+    }
+    this.heartMask = hearts;
     if (
       grid.w === this.gridW &&
       grid.h === this.gridH &&
@@ -721,9 +738,11 @@ class Pet {
     }
     if (!ink) {
       if (this.inkPainted) {
-        for (const s of this.cellSpans) {
+        for (let i = 0; i < this.cellSpans.length; i++) {
+          const s = this.cellSpans[i];
           if (s) {
-            s.style.color = "";
+            // Hearts keep their pink glow without sampled ink.
+            s.style.color = this.heartMask[i] ? HEART_INK : "";
             s.style.textShadow = "";
           }
         }
@@ -740,6 +759,11 @@ class Pet {
     for (let i = 0; i < this.cellSpans.length; i++) {
       const s = this.cellSpans[i];
       if (!s) continue; // spaces are never colored
+      // Hearts glow pink instead of the sampled backdrop ink.
+      if (this.heartMask[i]) {
+        if (s.style.color !== HEART_INK) s.style.color = HEART_INK;
+        continue;
+      }
       const color = ink.colors[i];
       const shadow = ink.shadows[i];
       if (typeof color !== "string" || typeof shadow !== "string") continue;

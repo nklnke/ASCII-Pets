@@ -110,7 +110,7 @@ describe("skins", () => {
     const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "ascii-color-")), "ascii.mjs");
     fs.writeFileSync(out, built.outputFiles[0].text);
     const m = await import(pathToFileURL(out).href);
-    const fills = new Set(["█", "●", "U", "o", "-", "?", "z", " ", "\n"]);
+    const fills = new Set(["█", "●", "U", "o", "-", "?", "z", "Z", " ", "\n"]);
     for (const { id } of SKIN_LIST) {
       const skin = m.SKIN_STYLES.ascii4[id];
       const colors = m.SKIN_STYLE_COLORS.ascii4[id];

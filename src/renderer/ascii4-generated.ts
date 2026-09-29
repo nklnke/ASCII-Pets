@@ -17,7 +17,7 @@ export const CAT4_HUNGRY: string[] = [
 ];
 export const CAT4_SLEEP: string[] = [
   " █        █  z\n ██      ██ \n ██████████ \n--█-████-█--\n ███●●●●███ \n  ████████  \n  ███  ███  ",
-  " █        █   z\n ██      ██ \n ██████████ \n--█-████-█--\n ███●●●●███ \n  ████████  \n  ███  ███  ",
+  " █        █   Z\n ██      ██ \n ██████████ \n--█-████-█--\n ███●●●●███ \n  ████████  \n  ███  ███  ",
 ];
 export const CAT4_JUMP: string[] = [
   " █        █ \n ██      ██ \n ██████████ \n--█U████U█--\n ███●UU●███ \n  ████████  \n   ██████   ",
@@ -42,7 +42,7 @@ export const CAT4_COLORS = {
   ],
   sleep: [
     ".k........k. z\n.kk......kk.\n.kkkkkkkkkk.\n--k-kkkk-k--\n.kkkNNNNkkk.\n..kkkkkkkk..\n..kkk..kkk..",
-    ".k........k.  z\n.kk......kk.\n.kkkkkkkkkk.\n--k-kkkk-k--\n.kkkNNNNkkk.\n..kkkkkkkk..\n..kkk..kkk..",
+    ".k........k.  Z\n.kk......kk.\n.kkkkkkkkkk.\n--k-kkkk-k--\n.kkkNNNNkkk.\n..kkkkkkkk..\n..kkk..kkk..",
   ],
   jump: [
     ".k........k.\n.kk......kk.\n.kkkkkkkkkk.\n--kUkkkkUk--\n.kkkNUUNkkk.\n..kkkkkkkk..\n...kkkkkk...",
@@ -68,7 +68,7 @@ export const DOG4_HUNGRY: string[] = [
 ];
 export const DOG4_SLEEP: string[] = [
   " ███    ███  z\n ████  ████ \n ██████████ \n █-██████-█ \n ██████████ \n  ████████  \n  ████████  \n  ███  ███  ",
-  " ███    ███   z\n ████  ████ \n ██████████ \n █-██████-█ \n ██████████ \n  ████████  \n  ████████  \n  ███  ███  ",
+  " ███    ███   Z\n ████  ████ \n ██████████ \n █-██████-█ \n ██████████ \n  ████████  \n  ████████  \n  ███  ███  ",
 ];
 export const DOG4_JUMP: string[] = [
   " ███    ███ \n ████  ████ \n ██████████ \n █U██████U█ \n ████●●████ \n  ███●●███  \n  ████████  \n   ██████   ",
@@ -93,7 +93,7 @@ export const DOG4_COLORS = {
   ],
   sleep: [
     ".kkk....kkk. z\n.kkkk..kkkk.\n.kkkkkkkkkk.\n.k-kkkkkk-k.\n.kkWWWWWWkk.\n..kkkkkkkk..\n..kkkkkkkk..\n..kkk..kkk..",
-    ".kkk....kkk.  z\n.kkkk..kkkk.\n.kkkkkkkkkk.\n.k-kkkkkk-k.\n.kkWWWWWWkk.\n..kkkkkkkk..\n..kkkkkkkk..\n..kkk..kkk..",
+    ".kkk....kkk.  Z\n.kkkk..kkkk.\n.kkkkkkkkkk.\n.k-kkkkkk-k.\n.kkWWWWWWkk.\n..kkkkkkkk..\n..kkkkkkkk..\n..kkk..kkk..",
   ],
   jump: [
     ".kkk....kkk.\n.kkkk..kkkk.\n.kkkkkkkkkk.\n.kUkkkkkkUk.\n.kkWWNNWWkk.\n..kkkNNkkk..\n..kkkkkkkk..\n...kkkkkk...",
@@ -119,7 +119,7 @@ export const FROG4_HUNGRY: string[] = [
 ];
 export const FROG4_SLEEP: string[] = [
   "  --    --   z\n ██████████ \n ██●●●●●●██ \n ██████████ \n  ████████  \n ███    ███ ",
-  "  --    --    z\n ██████████ \n ██●●●●●●██ \n ██████████ \n  ████████  \n ███    ███ ",
+  "  --    --    Z\n ██████████ \n ██●●●●●●██ \n ██████████ \n  ████████  \n ███    ███ ",
 ];
 export const FROG4_JUMP: string[] = [
   "  UU    UU  \n ██████████ \n ██●UUUU●██ \n ██████████ \n  ████████  \n   ██████   ",
@@ -136,15 +136,15 @@ export const FROG4_COLORS = {
   ],
   happy: [
     "..UU....UU..\n.kkkkkkkkkk.\n.kkNUUUUNkk.\n.kkkkkkkkkk.\n..kkkkkkkk..\n.kWk....kWk.",
-    "..UU....UU..\n.kkkkkkkkkk.\n.kkNUUUUNkk.\n.kkkkkkkkkk.\n..kkkkkkkk..\n.kLk....kWk.",
+    "..UU....UU..\n.kkkkkkkkkk.\n.kkNUUUUNkk.\n.kkkkkkkkkk.\n..kkkkkkkk..\n.Wkk....kkW.",
   ],
   hungry: [
     "..oo....oo..\n.kkkkkkkkkk. ?\n.kkNNNNNNkk.\n.kkkkkkkkkk.\n..kkkkkkkk..\n.kWk....kWk.",
-    "..oo....oo..\n.kkkkkkkkkk.  ?\n.kkNNNNNNkk.\n.kkkkkkkkkk.\n..kkkkkkkk..\n.kLk....kWk.",
+    "..oo....oo..\n.kkkkkkkkkk.  ?\n.kkNNNNNNkk.\n.kkkkkkkkkk.\n..kkkkkkkk..\n.Wkk....kkW.",
   ],
   sleep: [
     "..--....--.. z\n.kkkkkkkkkk.\n.kkNNNNNNkk.\n.kkkkkkkkkk.\n..kkkkkkkk..\n.kWk....kWk.",
-    "..--....--..  z\n.kkkkkkkkkk.\n.kkNNNNNNkk.\n.kkkkkkkkkk.\n..kkkkkkkk..\n.kWk....kWk.",
+    "..--....--..  Z\n.kkkkkkkkkk.\n.kkNNNNNNkk.\n.kkkkkkkkkk.\n..kkkkkkkk..\n.kWk....kWk.",
   ],
   jump: [
     "..UU....UU..\n.kkkkkkkkkk.\n.kkNUUUUNkk.\n.kkkkkkkkkk.\n..kkkkkkkk..\n...kkkkkk...",
@@ -170,7 +170,7 @@ export const BIRD4_HUNGRY: string[] = [
 ];
 export const BIRD4_SLEEP: string[] = [
   "   ██████    z\n █--████--█ \n ███●●●████ \n  ████████  \n  ████████  \n  ███  ███  ",
-  "   ██████     z\n █--████--█ \n ███●●●████ \n  ████████  \n  ████████  \n  ███  ███  ",
+  "   ██████     Z\n █--████--█ \n ███●●●████ \n  ████████  \n  ████████  \n  ███  ███  ",
 ];
 export const BIRD4_JUMP: string[] = [
   "   ██████   \n ██████████ \n ███●●●████ \n████████████\n  ████████  \n  ███  ███  ",
@@ -195,7 +195,7 @@ export const BIRD4_COLORS = {
   ],
   sleep: [
     "...kkkkkk... z\n.k--kkkk--k.\n.LkkNNNkkkL.\n..LkkkkkkL..\n..kkkkkkkk..\n..kWk..kWk..",
-    "...kkkkkk...  z\n.k--kkkk--k.\n.LkkNNNkkkL.\n..LkkkkkkL..\n..kkkkkkkk..\n..kWk..kWk..",
+    "...kkkkkk...  Z\n.k--kkkk--k.\n.LkkNNNkkkL.\n..LkkkkkkL..\n..kkkkkkkk..\n..kWk..kWk..",
   ],
   jump: [
     "...kkkkkk...\n.kOOkkkkOOk.\n.LkkNNNkkkL.\nLLLkkkkkkLLL\n..kkkkkkkk..\n..kWk..kWk..",
