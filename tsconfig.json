@@ -9,7 +9,9 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "incremental": true,
+    "tsBuildInfoFile": ".tsbuildinfo/main.tsbuildinfo"
   },
   "include": ["src/main.ts", "src/preload.ts", "src/shared/**/*.ts"]
 }

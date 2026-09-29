@@ -739,6 +739,8 @@ function createWindow(): void {
     transparent: true,
     backgroundColor: "#00000000",
     frame: false,
+    // Shown on ready-to-show below: no half-painted window on slow disks.
+    show: false,
     alwaysOnTop: true,
     skipTaskbar: true,
     resizable: false,
@@ -756,6 +758,9 @@ function createWindow(): void {
   applyAlwaysOnTop();
   win.setVisibleOnAllWorkspaces(true);
   win.setMenu(null);
+  win.once("ready-to-show", () => {
+    if (win && !win.isDestroyed()) win.show();
+  });
 
   // Click-through everywhere; the renderer re-enables mouse events
   // only while hovering the pet. forward:true keeps mousemove flowing
@@ -992,12 +997,17 @@ void app.whenReady().then(() => {
     // Older Electron — per-notification click handler still applies.
   }
   loadSettings();
-  applyOpenAtLogin();
   createWindow();
   createTray();
-  if (showStatus) createStatusWindow();
-  setupAutoUpdate();
-  if (colorMode) startSampler();
+  // Everything below can wait for the first paint: the strip (pets) shows
+  // first, status/updater/autostart/sampler join right after. Keeps cold
+  // start on the critical path: settings read + one window + tray.
+  win?.webContents.once("did-finish-load", () => {
+    applyOpenAtLogin();
+    if (showStatus) createStatusWindow();
+    setupAutoUpdate();
+    if (colorMode) startSampler();
+  });
 
   ipcMain.on("set-clickable", (_event, clickable: boolean) => {
     if (win && !win.isDestroyed()) {
