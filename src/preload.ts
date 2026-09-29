@@ -60,6 +60,9 @@ contextBridge.exposeInMainWorld("petAPI", {
   onSetMuted: (cb: (muted: boolean) => void): void => {
     ipcRenderer.on("set-muted", (_event, muted: boolean) => cb(muted));
   },
+  onSetVolume: (cb: (volume: number) => void): void => {
+    ipcRenderer.on("set-volume", (_event, volume: number) => cb(volume));
+  },
   getScale: (): Promise<number> => {
     return ipcRenderer.invoke("get-scale");
   },

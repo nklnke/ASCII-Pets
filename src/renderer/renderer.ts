@@ -29,7 +29,7 @@ import {
   temperamentForSlot,
 } from "../shared/temperament";
 import { clearPoop, loadPoop, loadStats, savePoop, saveStats, startAutosave } from "./pet-store";
-import { playAnnoyed, playBoing, playClean, playCurious, playDrop, playEatSound, playGreet, playHungry, playJump, playPetSound, playPoopSound, playSniff, playSnore, playSocial, playSong, playStartle, playStep, playWake, setMuted } from "./sound";
+import { playAnnoyed, playBoing, playClean, playCurious, playDrop, playEatSound, playGreet, playHungry, playJump, playPetSound, playPoopSound, playSniff, playSnore, playSocial, playSong, playStartle, playStep, playWake, setMuted, setVolume } from "./sound";
 import "./pet-api";
 
 const stageEl = document.getElementById("stage") as HTMLDivElement;
@@ -332,6 +332,9 @@ class Pet {
   gridH = 0;
   cellSpans: Array<HTMLSpanElement | null> = [];
   cellMask: boolean[] = [];
+  /** Speech bubble above the head (pet sounds, chat). */
+  bubble: HTMLDivElement;
+  bubbleUntil = 0;
   // TEMP-DEBUG: last rendered X for catching half-screen teleports.
   lastRx: number | undefined = undefined;
 
@@ -362,6 +365,10 @@ class Pet {
     this.el.className = "pet";
     this.el.classList.toggle("flat", styleFlat(style));
     stageEl.appendChild(this.el);
+    this.bubble = document.createElement("div");
+    this.bubble.className = "bubble";
+    this.bubble.style.display = "none";
+    stageEl.appendChild(this.bubble);
     this.wireEvents(this.el);
     this.syncElement();
     this.renderPosition(Date.now());
@@ -454,6 +461,21 @@ class Pet {
     return skinName(this.skinId);
   }
 
+  /** Say a line in the speech bubble above the head (auto-hides). */
+  say(text: string, durMs = 2000): void {
+    this.bubble.textContent = text;
+    this.bubble.style.display = "";
+    this.bubbleUntil = Date.now() + durMs;
+    this.placeBubble(Date.now());
+  }
+
+  /** Keep the bubble glued above the head (flight altitude included). */
+  placeBubble(now: number): void {
+    if (this.bubble.style.display === "none") return;
+    this.bubble.style.left = `${Math.round(this.x + this.width() / 2)}px`;
+    this.bubble.style.bottom = `${Math.round(this.hitEl().offsetHeight - this.yOffset(now) + 12)}px`;
+  }
+
   sleeping(): boolean {
     return isSleepy(this.stats) && Date.now() >= this.forceAwakeUntil;
   }
@@ -501,6 +523,7 @@ class Pet {
     if (this.flyer() && this.flyMode === "perch") {
       this.nextTakeoffAt = Math.min(this.nextTakeoffAt, Date.now() + 400);
     }
+    this.say("!");
     playStartle(this.skinId);
     showMsg(`${this.label()}: испугался!`);
   }
@@ -508,6 +531,7 @@ class Pet {
   greet(): void {
     this.startJump(1);
     playGreet(this.skinId);
+    this.say("Привет!");
     showMsg(`${this.label()}: *потягивается* Привет!`);
   }
 
@@ -539,6 +563,7 @@ class Pet {
     const t = `translateX(${qx.toFixed(1)}px) translateY(${this.yOffset(now).toFixed(1)}px)`;
     this.el.style.transform = t;
     if (this.cv) this.cv.style.transform = t;
+    this.placeBubble(now);
   }
 
   /** Vertical glyph offset (jump arc + stride bob + flight altitude). */
@@ -706,6 +731,7 @@ class Pet {
       this.startJump(0.4);
       this.setFrame(this.frames().happy[0]);
       showMsg(`${this.label()}: *зевок* …пять минут…`);
+      this.say("*зевок*");
       playWake(this.skinId);
       renderStats();
       return;
@@ -721,6 +747,7 @@ class Pet {
       this.slowUntil = now + TURN_SLOW_MS;
       this.startJump(0.5);
       showMsg(`${this.label()}: хватит!`);
+      this.say("хватит!");
       playAnnoyed(this.skinId);
       renderStats();
       return;
@@ -737,6 +764,7 @@ class Pet {
     this.startJump(0.6);
     this.setFrame(this.frames().happy[0]);
     showMsg(`${this.label()}: ${skinSound(this.skinId)} (${this.stats.pets})`);
+    this.say(skinSound(this.skinId));
     playPetSound(this.skinId);
     renderStats();
   }
@@ -750,6 +778,7 @@ class Pet {
     this.groundBird(this.eatUntil + 2000);
     this.setFrame(this.frames().eat);
     showMsg(`${this.label()}: *nom-nom* (покормлен ${this.stats.meals})`);
+    this.say("*nom-nom*");
     playEatSound();
     // Nature calls: with POOP_CHANCE the meal leaves a pile behind.
     if (this.piles.length < MAX_POOPS_PER_PET && rollPoop(Math.random())) {
@@ -1123,6 +1152,9 @@ class Pet {
   animate(tick: number): void {
     const now = Date.now();
     const f = this.frames();
+    // Speech bubble always tracks the head (flight altitude included).
+    if (now >= this.bubbleUntil) this.bubble.style.display = "none";
+    else this.placeBubble(now);
     // Feeding chomp alternates with a happy frame.
     if (now < this.eatUntil) {
       this.setFrame(tick % 2 === 0 ? f.eat : f.happy[0]);
@@ -1144,6 +1176,7 @@ class Pet {
         this.singingUntil = now + songDurationMs(this.skinId, this.songIdx);
         this.songNextNote = now;
         showMsg(`${this.label()} поёт: ${songFor(this.skinId, this.songIdx).name}!`);
+        this.say(`♪ ${songFor(this.skinId, this.songIdx).name}`, songDurationMs(this.skinId, this.songIdx));
         playSong(this.skinId, this.songIdx);
       }
     }
@@ -1185,6 +1218,7 @@ class Pet {
       this.nextCroak = now + 15000 + Math.random() * 15000;
       this.croakUntil = now + CROAK_MS;
       showMsg(`${this.label()}: ${skinSound(this.skinId)}`);
+      this.say(skinSound(this.skinId));
       playPetSound(this.skinId);
     }
     if (now < this.croakUntil) {
@@ -1275,6 +1309,7 @@ class Pet {
     saveStats(this.slot, this.stats);
     for (const pile of this.piles) pile.wrap.remove();
     this.piles = [];
+    this.bubble.remove();
     this.cv?.remove();
     this.cv = null;
     this.el.remove();
@@ -1769,6 +1804,74 @@ function socialStep(now: number): void {
   }
 }
 
+/** Chat lines: openers, replies, optional tails (each prefixed with the speaker's own voice). */
+const CHAT_OPENERS = ["привет!", "как дела?", "поиграем?", "эй, ты!", "муррр..."];
+const CHAT_REPLIES = ["привет!", "ага!", "давай!", "потом...", "хорошо!"];
+const CHAT_TAILS = ["хи-хи", "ладно!", "пошли!", "ок!"];
+/** First chat ~1.5–2.5 min after launch, then every 3–7 min. */
+const CHAT_FIRST_MIN = 90_000;
+const CHAT_FIRST_WINDOW = 60_000;
+const CHAT_MIN_MS = 180_000;
+const CHAT_WINDOW_MS = 240_000;
+/** Beats between chat turns + bubble hold. */
+const CHAT_BEAT_MS = 1400;
+const CHAT_HOLD_MS = 1800;
+
+/** Running chat: two pets exchanging bubbles (timestamp-driven, pause-friendly). */
+interface ChatState {
+  a: Pet;
+  b: Pet;
+  turns: string[];
+  idx: number;
+  nextBeat: number;
+}
+let chat: ChatState | null = null;
+let nextChatAt = Date.now() + CHAT_FIRST_MIN + Math.random() * CHAT_FIRST_WINDOW;
+
+function pickLine(pool: string[]): string {
+  return pool[Math.floor(Math.random() * pool.length)] ?? "...";
+}
+
+/** Build 2–3 turns: A opens, B replies, A sometimes closes (own voices). */
+function buildChat(a: Pet, b: Pet): string[] {
+  const turns = [
+    `${skinSound(a.skinId)} ${pickLine(CHAT_OPENERS)}`,
+    `${skinSound(b.skinId)} ${pickLine(CHAT_REPLIES)}`,
+  ];
+  if (Math.random() < 0.5) turns.push(`${skinSound(a.skinId)} ${pickLine(CHAT_TAILS)}`);
+  return turns;
+}
+
+/** Chats: two awake pets exchange speech bubbles — works at any distance. */
+function checkChat(now: number): void {
+  if (paused || dragPet || pets.length < 2 || socialActive(now)) return;
+  if (chat) {
+    if (now >= chat.nextBeat) {
+      const speaker = chat.idx % 2 === 0 ? chat.a : chat.b;
+      // Pack changed or speaker dozed off mid-chat — drop it quietly.
+      if (!pets.includes(speaker) || speaker.sleeping()) {
+        chat = null;
+        return;
+      }
+      speaker.say(chat.turns[chat.idx] ?? "...", CHAT_HOLD_MS);
+      chat.idx += 1;
+      chat.nextBeat = now + CHAT_BEAT_MS;
+      if (chat.idx >= chat.turns.length) chat = null;
+    }
+    return;
+  }
+  if (now < nextChatAt) return;
+  nextChatAt = now + CHAT_MIN_MS + Math.random() * CHAT_WINDOW_MS;
+  const awake = pets.filter((p) => !p.sleeping());
+  if (awake.length < 2) return;
+  const a = awake[Math.floor(Math.random() * awake.length)];
+  if (!a) return;
+  const rest = awake.filter((p) => p !== a);
+  const b = rest[Math.floor(Math.random() * rest.length)];
+  if (!b) return;
+  chat = { a, b, turns: buildChat(a, b), idx: 0, nextBeat: now };
+}
+
 /** Meetings: close pets start 2–4s scenes — the whole trio, or one pair. */
 function checkSocial(now: number): void {
   if (paused || dragPet || pets.length < 2) return;
@@ -1821,6 +1924,7 @@ function checkSocial(now: number): void {
 function applyPack(skins: string[]): void {
   const pack = normalizePack(skins);
   social = null; // pack changed mid-scene — drop the choreography
+  chat = null; // ...and any running chat
   // Remove extras.
   while (pets.length > pack.length) {
     const removed = pets.pop();
@@ -1952,6 +2056,7 @@ function frame(): void {
   if (paused) return;
   checkSocial(now);
   socialStep(now);
+  checkChat(now);
   for (const p of pets) p.step(dt, now);
 }
 requestAnimationFrame(frame);
@@ -2024,6 +2129,7 @@ window.petAPI?.onSetPaused((value: boolean) => {
   showMsg(value ? "*z-z-z* (пауза)" : "*потягивается*");
 });
 window.petAPI?.onSetMuted((m: boolean) => setMuted(m));
+window.petAPI?.onSetVolume((v: number) => setVolume(v));
 window.petAPI?.onSetScale((s: number) => applyScale(s));
 window.petAPI?.onSetShadows((on: boolean) => applyShadows(on));
 

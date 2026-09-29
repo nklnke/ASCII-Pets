@@ -28,6 +28,7 @@ const cSound = document.getElementById("c-sound") as HTMLInputElement;
 const cLogin = document.getElementById("c-login") as HTMLInputElement;
 const cFps = document.getElementById("c-fps") as HTMLInputElement;
 const cShadows = document.getElementById("c-shadows") as HTMLInputElement;
+const volumeEl = document.getElementById("volume") as HTMLInputElement;
 
 /** Last snapshot from main (drives dependent controls like the pack pair). */
 let current: SettingsSnapshot | null = null;
@@ -88,6 +89,7 @@ function applyToForm(s: SettingsSnapshot): void {
   cLogin.checked = !!s.openAtLogin;
   cFps.checked = !!s.fpsMeter;
   cShadows.checked = s.shadows !== false;
+  volumeEl.value = String(Math.round((typeof s.volume === "number" && isFinite(s.volume) ? s.volume : 1) * 100));
 }
 
 pet0El.addEventListener("change", () => {
@@ -126,6 +128,10 @@ cStatus.addEventListener("change", () => window.petAPI?.setSettings({ showStatus
 cColor.addEventListener("change", () => window.petAPI?.setSettings({ colorMode: cColor.checked }));
 cNotify.addEventListener("change", () => window.petAPI?.setSettings({ notifyHungry: cNotify.checked }));
 cSound.addEventListener("change", () => window.petAPI?.setSettings({ muted: !cSound.checked }));
+volumeEl.addEventListener("input", () => {
+  const v = Number(volumeEl.value) / 100;
+  if (isFinite(v)) window.petAPI?.setSettings({ volume: v });
+});
 cLogin.addEventListener("change", () => window.petAPI?.setSettings({ openAtLogin: cLogin.checked }));
 cFps.addEventListener("change", () => window.petAPI?.setSettings({ fpsMeter: cFps.checked }));
 cShadows.addEventListener("change", () => window.petAPI?.setSettings({ shadows: cShadows.checked }));

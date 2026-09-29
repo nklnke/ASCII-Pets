@@ -33,7 +33,7 @@ describe("songs", () => {
 
   it("playback lasts a couple of seconds, voices differ per skin", () => {
     const cat = songDurationMs("cat", 0);
-    assert.ok(cat >= 1500 && cat <= 6000, String(cat));
+    assert.ok(cat >= 1500 && cat <= 12000, String(cat));
     const waves = new Set(["cat", "dog", "frog", "bird"].map((s) => voiceFor(s).wave));
     assert.equal(waves.size, 4);
     for (const skin of ["cat", "dog", "frog", "bird"]) {

@@ -33,6 +33,8 @@ export interface SettingsSnapshot {
   colorMode: boolean;
   notifyHungry: boolean;
   muted: boolean;
+  /** Master volume 0..1 for the renderer synth. */
+  volume: number;
   petScale: number;
   openAtLogin: boolean;
   /** Selected monitor id, or null = follow the primary display. */

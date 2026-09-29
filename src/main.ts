@@ -21,6 +21,8 @@ let notifyHungry = true;
 let lastHungerNotify: number | null = null;
 /** WebAudio voices (renderer synth) + pet font scale. Owned by main, mirrored. */
 let muted = false;
+/** Master volume 0..1 for the renderer synth (settings slider). */
+let volume = 1;
 let petScale = 1;
 const PET_SCALES = [0.85, 1, 1.3, 1.6];
 /** Pack = skin id per pet slot; renderer mirrors it. */
@@ -68,6 +70,8 @@ interface AppSettings {
   colorMode?: boolean;
   notifyHungry?: boolean;
   muted?: boolean;
+  /** Master volume 0..1. */
+  volume?: number;
   petScale?: number;
   showStatus?: boolean;
   statusPos?: { x?: number; y?: number };
@@ -102,6 +106,7 @@ function loadSettings(): void {
   if (typeof s.colorMode === "boolean") colorMode = s.colorMode;
   if (typeof s.notifyHungry === "boolean") notifyHungry = s.notifyHungry;
   if (typeof s.muted === "boolean") muted = s.muted;
+  if (typeof s.volume === "number" && isFinite(s.volume)) volume = Math.min(Math.max(s.volume, 0), 1);
   if (typeof s.petScale === "number" && PET_SCALES.includes(s.petScale)) petScale = s.petScale;
   if (typeof s.showStatus === "boolean") showStatus = s.showStatus;
   if (
@@ -127,7 +132,7 @@ function saveSettings(): void {
     fs.mkdirSync(path.dirname(settingsPath()), { recursive: true });
     fs.writeFileSync(
       settingsPath(),
-      JSON.stringify({ onTop, openAtLogin, pack, style, colorMode, notifyHungry, muted, petScale, showStatus, statusPos, displayId, fpsMeter, shadows }),
+      JSON.stringify({ onTop, openAtLogin, pack, style, colorMode, notifyHungry, muted, volume, petScale, showStatus, statusPos, displayId, fpsMeter, shadows }),
     );
   } catch {
     // Settings are best-effort; the app works without them.
@@ -388,6 +393,15 @@ function setMuted(m: boolean): void {
   if (win && !win.isDestroyed()) win.webContents.send("set-muted", muted);
 }
 
+/** Master volume from the settings slider (0..1, invalid ignored). */
+function setVolume(v: number): void {
+  if (typeof v !== "number" || !isFinite(v)) return;
+  volume = Math.min(Math.max(v, 0), 1);
+  saveSettings();
+  broadcastSettings();
+  if (win && !win.isDestroyed()) win.webContents.send("set-volume", volume);
+}
+
 function setPetScale(scale: number): void {
   if (!PET_SCALES.includes(scale)) return;
   petScale = scale;
@@ -416,6 +430,7 @@ function settingsSnapshot(): SettingsSnapshot {
     colorMode,
     notifyHungry,
     muted,
+    volume,
     petScale,
     openAtLogin,
     displayId,
@@ -460,6 +475,7 @@ function applySettings(update: SettingsUpdate): void {
     broadcastSettings();
   }
   if (typeof update.muted === "boolean" && update.muted !== muted) setMuted(update.muted);
+  if (typeof update.volume === "number") setVolume(update.volume);
   if (typeof update.petScale === "number") setPetScale(update.petScale);
   if (typeof update.openAtLogin === "boolean" && update.openAtLogin !== openAtLogin) {
     openAtLogin = update.openAtLogin;
@@ -713,6 +729,7 @@ function createWindow(): void {
   win.webContents.on("did-finish-load", () => {
     if (!win || win.isDestroyed()) return;
     win.webContents.send("set-muted", muted);
+    win.webContents.send("set-volume", volume);
     win.webContents.send("set-scale", petScale);
     win.webContents.send("set-shadows", shadows);
     win.webContents.send("pet-greet");

@@ -5,6 +5,8 @@ import { SONG_BEAT_MS, songFor, voiceFor } from "../shared/songs";
 // respect the global mute flag owned by main (tray menu "Звук").
 
 let muted = false;
+/** Master volume 0..1 (owned by main via settings.json, applied to every tone). */
+let volume = 1;
 let ctx: AudioContext | null = null;
 
 /** Throttle keys for high-frequency sounds (steps/snore/growl). */
@@ -16,6 +18,12 @@ export function setMuted(m: boolean): void {
 
 export function isMuted(): boolean {
   return muted;
+}
+
+/** Master volume from main (0..1, invalid values ignored). */
+export function setVolume(v: number): void {
+  if (typeof v !== "number" || !isFinite(v)) return;
+  volume = Math.min(Math.max(v, 0), 1);
 }
 
 function ac(): AudioContext | null {
@@ -41,17 +49,18 @@ function gate(key: string, minMs: number): boolean {
 }
 
 function tone(freq: number, durMs: number, type: OscillatorType, delayMs: number, gain = 0.08): void {
-  if (muted) return;
+  if (muted || volume <= 0) return;
   const c = ac();
   if (!c) return;
   try {
+    const peak = Math.max(0.0001, gain * volume);
     const t0 = c.currentTime + delayMs / 1000;
     const osc = c.createOscillator();
     const g = c.createGain();
     osc.type = type;
     osc.frequency.setValueAtTime(freq, t0);
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(gain, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + durMs / 1000);
     osc.connect(g).connect(c.destination);
     osc.start(t0);
@@ -63,10 +72,11 @@ function tone(freq: number, durMs: number, type: OscillatorType, delayMs: number
 
 /** Frequency sweep (whoosh/jump/slide) with the same envelope as tone(). */
 function sweep(f0: number, f1: number, durMs: number, type: OscillatorType, delayMs: number, gain = 0.08): void {
-  if (muted) return;
+  if (muted || volume <= 0) return;
   const c = ac();
   if (!c) return;
   try {
+    const peak = Math.max(0.0001, gain * volume);
     const t0 = c.currentTime + delayMs / 1000;
     const osc = c.createOscillator();
     const g = c.createGain();
@@ -74,7 +84,7 @@ function sweep(f0: number, f1: number, durMs: number, type: OscillatorType, dela
     osc.frequency.setValueAtTime(Math.max(20, f0), t0);
     osc.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + durMs / 1000);
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(gain, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + durMs / 1000);
     osc.connect(g).connect(c.destination);
     osc.start(t0);

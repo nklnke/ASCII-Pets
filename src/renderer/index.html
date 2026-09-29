@@ -119,6 +119,24 @@
   #stage .pet.flat span {
     text-shadow: none;
   }
+  /* Speech bubbles: a pet's own voice line above its head (pet sounds,
+     chat). Solid bg reads on any wallpaper (no inversion needed);
+     pointer-events:none keeps the click-through contract intact. */
+  #stage .bubble {
+    position: absolute;
+    transform: translateX(-50%);
+    margin: 0;
+    padding: 8px 16px;
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: calc(15px * var(--pet-scale));
+    line-height: 1.5;
+    color: #fff;
+    background: rgba(20, 20, 28, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 14px;
+    white-space: nowrap;
+    pointer-events: none;
+  }
   /* Per-glyph ink: each symbol carries its own inverted color. */
   #stage .pet span {
     transition: color 300ms linear, text-shadow 300ms linear;

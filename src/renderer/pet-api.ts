@@ -26,6 +26,7 @@ export interface PetApi {
   onSetPaused: (cb: (value: boolean) => void) => void;
   getMuted: () => Promise<boolean>;
   onSetMuted: (cb: (muted: boolean) => void) => void;
+  onSetVolume: (cb: (volume: number) => void) => void;
   getScale: () => Promise<number>;
   getShadows: () => Promise<boolean>;
   onSetScale: (cb: (scale: number) => void) => void;
