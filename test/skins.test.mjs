@@ -151,4 +151,30 @@ describe("skins", () => {
       }
     }
   });
+
+  it("poop piles are symmetric in every style (no lopsided edges)", async () => {
+    const esbuild = await import("esbuild");
+    const built = await esbuild.build({
+      entryPoints: [path.join(ROOT, "src", "renderer", "ascii.ts")],
+      bundle: true,
+      format: "esm",
+      write: false,
+      logLevel: "error",
+    });
+    const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "ascii-poop-")), "ascii.mjs");
+    fs.writeFileSync(out, built.outputFiles[0].text);
+    const m = await import(pathToFileURL(out).href);
+    const swap = { "/": "\\", "\\": "/", "(": ")", ")": "(", "<": ">", ">": "<", "[": "]", "]": "[" };
+    const mirror = (row) => [...row].reverse().map((ch) => swap[ch] ?? ch).join("");
+    for (const { id: styleId } of STYLE_LIST) {
+      const rows = m.poopFor(styleId).split("\n");
+      assert.ok(rows.length >= 2, `${styleId}: poop needs rows`);
+      const widths = new Set(rows.map((r) => r.length));
+      assert.equal(widths.size, 1, `${styleId}: poop rows must share one width`);
+      for (const row of rows) {
+        assert.ok(row.trim().length > 0, `${styleId}: no blank lines in poop`);
+        assert.equal(mirror(row), row, `${styleId}: poop row not symmetric: ${JSON.stringify(row)}`);
+      }
+    }
+  });
 });

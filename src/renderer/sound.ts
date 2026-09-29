@@ -7,6 +7,8 @@ import { SONG_BEAT_MS, songFor, voiceFor } from "../shared/songs";
 let muted = false;
 /** Master volume 0..1 (owned by main via settings.json, applied to every tone). */
 let volume = 1;
+/** Global lift after the volume slider landed (+15% across the board). */
+const MASTER = 1.15;
 let ctx: AudioContext | null = null;
 
 /** Throttle keys for high-frequency sounds (steps/snore/growl). */
@@ -53,7 +55,7 @@ function tone(freq: number, durMs: number, type: OscillatorType, delayMs: number
   const c = ac();
   if (!c) return;
   try {
-    const peak = Math.max(0.0001, gain * volume);
+    const peak = Math.max(0.0001, gain * volume * MASTER);
     const t0 = c.currentTime + delayMs / 1000;
     const osc = c.createOscillator();
     const g = c.createGain();
@@ -76,7 +78,7 @@ function sweep(f0: number, f1: number, durMs: number, type: OscillatorType, dela
   const c = ac();
   if (!c) return;
   try {
-    const peak = Math.max(0.0001, gain * volume);
+    const peak = Math.max(0.0001, gain * volume * MASTER);
     const t0 = c.currentTime + delayMs / 1000;
     const osc = c.createOscillator();
     const g = c.createGain();
@@ -145,7 +147,7 @@ export function playJump(skinId: string): void {
   if (skinId === "dog") {
     sweep(200, 430, 150, "square", 0, 0.06);
   } else if (skinId === "frog") {
-    sweep(140, 320, 200, "sawtooth", 0, 0.09);
+    sweep(140, 320, 200, "sawtooth", 0, 0.06);
   } else if (skinId === "bird") {
     sweep(900, 1900, 180, "triangle", 0, 0.07);
   } else {
@@ -167,9 +169,9 @@ export function playStep(gait: string, skinId: string): void {
 /** Cleanup sparkle: rising wipe when the pile is removed. */
 export function playClean(): void {
   if (muted) return;
-  tone(500, 70, "triangle", 0, 0.1);
-  tone(700, 70, "triangle", 80, 0.1);
-  tone(950, 90, "triangle", 160, 0.09);
+  tone(500, 70, "triangle", 0, 0.07);
+  tone(700, 70, "triangle", 80, 0.07);
+  tone(950, 90, "triangle", 160, 0.06);
 }
 
 /** Frightened yelp (jump whoosh already fired from startJump). */
@@ -227,6 +229,41 @@ export function playDrop(): void {
   if (muted) return;
   tone(160, 90, "sine", 0, 0.1);
   tone(110, 100, "sine", 60, 0.09);
+}
+
+/** Sleeping cat purr: gentle low pulses (dogs/frogs/birds keep snoring). */
+export function playPurr(): void {
+  if (muted) return;
+  if (!gate("purr", 1800)) return;
+  tone(85, 220, "sine", 0, 0.07);
+  tone(85, 220, "sine", 320, 0.06);
+}
+
+/** Dog howl: long rising wail for the rare howling state. */
+export function playHowl(): void {
+  if (muted) return;
+  sweep(280, 720, 900, "sine", 0, 0.09);
+  tone(560, 700, "sine", 950, 0.07);
+}
+
+/** Frog deep croak: low long blast for the rare 20s croak. */
+export function playDeepCroak(): void {
+  if (muted) return;
+  tone(65, 550, "sawtooth", 0, 0.12);
+  tone(50, 600, "sawtooth", 150, 0.1);
+}
+
+/** Parade march drum: alternating bass thumps, called on march beats. */
+export function playMarchDrum(alt: boolean): void {
+  if (muted) return;
+  if (alt) tone(150, 90, "sine", 0, 0.11);
+  else tone(110, 110, "sine", 0, 0.12);
+}
+
+/** Dance waltz tick: soft tick on dance beats. */
+export function playDanceTick(alt: boolean): void {
+  if (muted) return;
+  tone(alt ? 660 : 520, 60, "triangle", 0, 0.05);
 }
 
 /** Fling boing: fast rising sweep + landing thud. */

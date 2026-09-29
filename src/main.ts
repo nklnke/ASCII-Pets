@@ -436,6 +436,7 @@ function settingsSnapshot(): SettingsSnapshot {
     displayId,
     fpsMeter,
     shadows,
+    updateStatus,
   };
 }
 
@@ -515,14 +516,43 @@ function sendToRenderer(channel: "pet-action" | "pet-feed" | "pet-clean-poop"): 
 }
 
 /** Auto-update via electron-updater (NSIS target only; portable has no updater). */
+type UpdateStatus = "idle" | "available" | "downloaded" | "error";
+let updateStatus: UpdateStatus = "idle";
+/** Rolling re-check while running. */
+const UPDATE_CHECK_MS = 6 * 3600_000;
+
+function setUpdateStatus(s: UpdateStatus): void {
+  if (updateStatus === s) return;
+  updateStatus = s;
+  broadcastSettings();
+}
+
+type AutoUpdater = typeof import("electron-updater")["autoUpdater"];
+
+/** The updater when self-update is possible, else null (dev/portable/missing). */
+function getUpdater(): AutoUpdater | null {
+  if (!app.isPackaged || isPortableRun()) return null;
+  try {
+    // Lazy require so dev/test without the package still boot.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { autoUpdater } = require("electron-updater") as typeof import("electron-updater");
+    return autoUpdater;
+  } catch {
+    return null;
+  }
+}
+
 let updaterErrorHooked = false;
 function hookUpdaterErrors(updater: { on(event: "error", listener: (error: Error) => void): unknown }): void {
   if (updaterErrorHooked) return;
   updaterErrorHooked = true;
   try {
-    // Unhandled 'error' events throw — swallow: offline / no publish config /
-    // portable runs are all normal and the app works without updates.
-    updater.on("error", () => {});
+    // Unhandled 'error' events throw — record for the settings status line
+    // and swallow: offline / no publish config are normal, the app works
+    // without updates.
+    updater.on("error", () => {
+      setUpdateStatus("error");
+    });
   } catch {
     // Emitter going away — nothing to hook.
   }
@@ -534,60 +564,69 @@ function isPortableRun(): boolean {
 }
 
 function setupAutoUpdate(): void {
-  if (!app.isPackaged) return;
-  try {
-    // Lazy require so dev/test without the package still boot.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { autoUpdater } = require("electron-updater") as typeof import("electron-updater");
-    autoUpdater.autoDownload = true;
-    autoUpdater.autoInstallOnAppQuit = true;
-    // We ship plain NSIS, not nsis-web (no signature verification on web
-    // payloads) — refuse such payloads if the server ever offers one.
-    autoUpdater.disableWebInstaller = true;
-    hookUpdaterErrors(autoUpdater);
-    autoUpdater.on("update-downloaded", () => {
-      try {
-        const n = new Notification({
-          title: "ASCII Pets обновились!",
-          body: "Новая версия установится при выходе",
-        });
-        n.show();
-      } catch {
-        // Notifications unavailable — silent auto-install on quit still applies.
-      }
-    });
-    // Delayed first check so the pet shows up before any dialog.
-    setTimeout(() => {
-      try {
-        const r = autoUpdater.checkForUpdatesAndNotify?.() as unknown;
-        if (r && typeof (r as Promise<unknown>).catch === "function") {
-          void (r as Promise<unknown>).catch(() => {
-            // No publish config / offline — app works without updates.
-          });
+  const updater = getUpdater();
+  if (!updater) return;
+  updater.autoDownload = true;
+  updater.autoInstallOnAppQuit = true;
+  // We ship plain NSIS, not nsis-web (no signature verification on web
+  // payloads) — refuse such payloads if the server ever offers one.
+  updater.disableWebInstaller = true;
+  hookUpdaterErrors(updater);
+  updater.on("update-available", () => {
+    setUpdateStatus("available");
+    try {
+      new Notification({ title: "ASCII Pets", body: "Скачивается новая версия…" }).show();
+    } catch {
+      // Notifications unavailable — download continues silently.
+    }
+  });
+  updater.on("update-downloaded", () => {
+    setUpdateStatus("downloaded");
+    try {
+      // Single toast (no checkForUpdatesAndNotify — it notifies on its own,
+      // which would double up): click installs and restarts right away.
+      const n = new Notification({
+        title: "ASCII Pets обновились!",
+        body: "Клик — установить и перезапустить",
+      });
+      n.on("click", () => {
+        try {
+          getUpdater()?.quitAndInstall();
+        } catch {
+          // Quit manually — auto-install on quit still applies.
         }
-      } catch {
-        // electron-updater missing — app works without updates.
-      }
-    }, 15_000);
-  } catch {
-    // electron-updater missing or no publish config — app works without updates.
-  }
+      });
+      n.show();
+    } catch {
+      // Notifications unavailable — silent auto-install on quit still applies.
+    }
+  });
+  updater.on("update-not-available", () => {
+    if (updateStatus === "error") setUpdateStatus("idle");
+  });
+  // Delayed first check so the pet shows up before any dialog, then rolling.
+  setTimeout(() => {
+    checkForUpdatesNow();
+    const timer = setInterval(() => checkForUpdatesNow(), UPDATE_CHECK_MS);
+    timer.unref();
+  }, 15_000);
 }
 
 function checkForUpdatesNow(): void {
-  if (isPortableRun()) return; // Portable builds update by re-downloading.
+  const updater = getUpdater();
+  if (!updater) return; // dev/portable — nothing to check
+  hookUpdaterErrors(updater);
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { autoUpdater } = require("electron-updater") as typeof import("electron-updater");
-    hookUpdaterErrors(autoUpdater);
-    const r = autoUpdater.checkForUpdatesAndNotify?.() as unknown;
+    const r = updater.checkForUpdates() as unknown;
     if (r && typeof (r as Promise<unknown>).catch === "function") {
       void (r as Promise<unknown>).catch(() => {
-        // No publish config / offline — silent, tooltip still updates.
+        // No publish config / offline — silent, status keeps last state.
+        setUpdateStatus("error");
       });
     }
   } catch {
-    // No updater (dev/portable) — nothing to check.
+    // No updater — nothing to check.
+    setUpdateStatus("error");
   }
 }
 

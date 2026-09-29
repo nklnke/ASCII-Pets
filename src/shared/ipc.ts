@@ -43,6 +43,8 @@ export interface SettingsSnapshot {
   fpsMeter: boolean;
   /** Text shadows + silhouette glow on the stage. */
   shadows: boolean;
+  /** Auto-updater state for the settings window status line. */
+  updateStatus: "idle" | "available" | "downloaded" | "error";
 }
 
 /** One row of the monitor picker (dynamic — displays come and go). */

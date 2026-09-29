@@ -29,7 +29,7 @@ import {
   temperamentForSlot,
 } from "../shared/temperament";
 import { clearPoop, loadPoop, loadStats, savePoop, saveStats, startAutosave } from "./pet-store";
-import { playAnnoyed, playBoing, playClean, playCurious, playDrop, playEatSound, playGreet, playHungry, playJump, playPetSound, playPoopSound, playSniff, playSnore, playSocial, playSong, playStartle, playStep, playWake, setMuted, setVolume } from "./sound";
+import { playAnnoyed, playBoing, playClean, playCurious, playDanceTick, playDeepCroak, playDrop, playEatSound, playGreet, playHowl, playHungry, playJump, playMarchDrum, playPetSound, playPoopSound, playPurr, playSniff, playSnore, playSocial, playSong, playStartle, playStep, playWake, setMuted, setVolume } from "./sound";
 import "./pet-api";
 
 const stageEl = document.getElementById("stage") as HTMLDivElement;
@@ -81,14 +81,23 @@ const MAX_NOTES = 6;
 /** Bird level cruise speed (px/s) + acceleration cap (px/s^2, smooth turns). */
 const CRUISE_SPEED = 240;
 const FLY_ACCEL = 780;
-/** Full wingbeat cycle during flap bursts (ms); glides hold wings spread. */
+/** Full wingbeat cycle in flight (ms, mostly flapping, brief glides). */
 const WINGBEAT_MS = 300;
-const FLAP_BURST_MIN = 800;
-const FLAP_BURST_MAX = 1800;
-const GLIDE_MIN = 900;
-const GLIDE_MAX = 2600;
+const FLAP_BURST_MIN = 2000;
+const FLAP_BURST_MAX = 4000;
+const GLIDE_MIN = 500;
+const GLIDE_MAX = 1200;
 /** Ease-off distance to the waypoint (px). */
 const ARRIVE_RADIUS = 90;
+/** Very rare solo states: first roll 25–50 min after launch, then rolling. */
+const RARE_MIN_MS = 1_500_000;
+const RARE_WINDOW_MS = 1_500_000;
+/** Rare state lengths: cat rage 6–10s, dog howl 8–12s, frog deep croak 20s. */
+const RAGE_MIN_MS = 6000;
+const RAGE_WINDOW_MS = 4000;
+const HOWL_MIN_MS = 8000;
+const HOWL_WINDOW_MS = 4000;
+const DEEP_CROAK_MS = 20000;
 /** Bird descent speed when forced to land (sleep/meals, px/s). */
 const LAND_SPEED = 380;
 /** Airborne stretches before the bird lands for a break (ms). */
@@ -110,8 +119,57 @@ interface PoopPile {
   x: number;
 }
 
-/** Pile ink (matches the old .poop CSS color). */
-const POOP_INK = "#c98a4b";
+/** Pile ink (dark brown heap). */
+const POOP_INK = "#7a4a1e";
+
+/** A poop dropped mid-flight, falling to the floor with gravity. */
+interface FallingPoop {
+  el: HTMLCanvasElement;
+  owner: Pet;
+  x: number;
+  /** Height above the floor (px). */
+  y: number;
+  vy: number;
+}
+const fallings: FallingPoop[] = [];
+/** Gravity for falling poops (px/s^2). */
+const FALL_G = 1400;
+/** Air-drop rate while flying (~once per ~7 min of flight). */
+const AIR_POOP_PER_SEC = 0.0025;
+
+/** Release a poop from the current position (bird drops it mid-flight). */
+function dropFalling(p: Pet): void {
+  const cv = document.createElement("canvas");
+  cv.style.position = "absolute";
+  drawPoop(cv);
+  stageEl.appendChild(cv);
+  fallings.push({ el: cv, owner: p, x: p.x + p.width() / 2, y: p.flyY + 20, vy: 0 });
+}
+
+/** Integrate falling poops; splats become floor piles. */
+function stepFallings(dt: number): void {
+  for (let i = fallings.length - 1; i >= 0; i--) {
+    const f = fallings[i];
+    if (!f) continue;
+    // Owner gone (pack changed mid-fall) — vanish without a pile.
+    if (!pets.includes(f.owner)) {
+      fallings.splice(i, 1);
+      f.el.remove();
+      continue;
+    }
+    f.vy += FALL_G * dt;
+    f.y -= f.vy * dt;
+    if (f.y <= 0) {
+      fallings.splice(i, 1);
+      f.el.remove();
+      f.owner.dropPoop(f.owner.clampX(f.x));
+      showMsg(`${f.owner.label()}: ой… кликни по кучке, чтобы убрать`);
+    } else {
+      f.el.style.left = `${Math.round(f.x)}px`;
+      f.el.style.bottom = `${Math.round(f.y)}px`;
+    }
+  }
+}
 
 /** Paint a text grid as seamless fills (shared by pets and poop piles).
  *  Backing store first (CSS size derives from it: 1:1 device pixels, no
@@ -310,9 +368,14 @@ class Pet {
   /** Flight velocity (px/s) for steering with limited acceleration. */
   flyVX = 0;
   flyVY = 0;
-  /** Wing state in flight: flap bursts vs locked-wing glides. */
+  /** Wing state in flight: long flap bursts, brief glides. */
   airPhase: "flap" | "glide" = "flap";
   phaseUntil = 0;
+  /** Very rare solo state (cat rage / dog howl / frog deep croak). */
+  rareKind: "rage" | "howl" | "deepcroak" | null = null;
+  rareUntil = 0;
+  rareNextSound = 0;
+  nextRareAt = 0;
   // Song state: next attempt timestamp, singing window, melody, note pacing.
   nextSongAt = 0;
   singingUntil = 0;
@@ -358,6 +421,8 @@ class Pet {
     this.flyToX = x;
     // The bird takes off shortly after launch instead of hopping on the floor.
     this.nextTakeoffAt = Date.now() + 1500 + Math.random() * 2500;
+    // Solo rarity debuts late: the pack settles in first.
+    this.nextRareAt = Date.now() + RARE_MIN_MS + Math.random() * RARE_WINDOW_MS;
     this.nextCroak = Date.now() + 8000 + Math.random() * 12000;
     // Stagger debut songs so the pack doesn't choir at once.
     this.nextSongAt = Date.now() + SONG_MIN_MS + slot * 45_000 + Math.random() * 120_000;
@@ -723,6 +788,75 @@ class Pet {
     return null;
   }
 
+  /** Roll a very rare solo state (cat rage / dog howl / frog deep croak). */
+  maybeStartRare(now: number): boolean {
+    this.nextRareAt = now + RARE_MIN_MS + Math.random() * RARE_WINDOW_MS;
+    if (
+      paused ||
+      dragPet === this ||
+      this.sleeping() ||
+      now < this.eatUntil ||
+      now < this.singingUntil ||
+      socialActive(now) ||
+      this.sniffing(now)
+    ) {
+      return false;
+    }
+    if (this.skinId === "cat") {
+      this.rareKind = "rage";
+      this.rareUntil = now + RAGE_MIN_MS + Math.random() * RAGE_WINDOW_MS;
+      this.rareNextSound = now;
+      this.say("ФШШШ!");
+      showMsg(`${this.label()}: крайняя агрессия!`);
+      return true;
+    }
+    if (this.skinId === "dog") {
+      this.rareKind = "howl";
+      this.rareUntil = now + HOWL_MIN_MS + Math.random() * HOWL_WINDOW_MS;
+      this.rareNextSound = now;
+      // Sit down for the song.
+      this.sniffUntil = this.rareUntil;
+      this.say("А-у-у!");
+      showMsg(`${this.label()} сел и завыл долгую песню…`);
+      return true;
+    }
+    if (this.skinId === "frog") {
+      this.rareKind = "deepcroak";
+      this.rareUntil = now + DEEP_CROAK_MS;
+      this.rareNextSound = now;
+      // Sit still, throat out.
+      this.nextHopAt = this.rareUntil;
+      this.say("*КВА-А-А*");
+      showMsg(`${this.label()}: глубокий долгий квак…`);
+      return true;
+    }
+    return false;
+  }
+
+  /** Render an active rare state (frames + periodic voice). */
+  animateRare(now: number): void {
+    const f = this.frames();
+    if (this.rareKind === "rage") {
+      this.setFrame(Math.floor(now / 150) % 2 === 0 ? f.hungry[0] : f.eat);
+      if (now >= this.rareNextSound) {
+        this.rareNextSound = now + 900;
+        playAnnoyed("cat");
+      }
+    } else if (this.rareKind === "howl") {
+      this.setFrame(f.walkRight[0]);
+      if (now >= this.rareNextSound) {
+        this.rareNextSound = now + 2200;
+        playHowl();
+      }
+    } else {
+      this.setFrame(f.eat);
+      if (now >= this.rareNextSound) {
+        this.rareNextSound = now + 1600;
+        playDeepCroak();
+      }
+    }
+  }
+
   doPet(): void {
     const now = Date.now();
     // Wake-up click: a sleepy pet yawns awake for a while (not a pat, no spam).
@@ -873,6 +1007,11 @@ class Pet {
     for (let i = 0; i < this.piles.length; i++) {
       this.stats = tickDirty(this.stats, elapsedMin, Date.now());
     }
+    // Nature calls on its own sometimes (~5% per 30s tick, piles capped).
+    if (this.piles.length < MAX_POOPS_PER_PET && Math.random() < 0.05) {
+      this.dropPoop(this.clampX(this.x + 60));
+      showMsg(`${this.label()}: ой… кликни по кучке, чтобы убрать`);
+    }
     saveStats(this.slot, this.stats);
   }
 
@@ -944,13 +1083,12 @@ class Pet {
     this.nextTakeoffAt = Math.max(this.nextTakeoffAt, until, now + 500);
   }
 
-  /** Takeoff: lift off smoothly into a flap burst across the window. */
+  /** Takeoff: lift off smoothly and flap non-stop across the window. */
   takeOff(now: number): void {
     this.flyMode = "fly";
     this.flyVX = 0;
     this.flyVY = 0;
     this.airPhase = "flap";
-    this.phaseUntil = now + FLAP_BURST_MIN + Math.random() * (FLAP_BURST_MAX - FLAP_BURST_MIN);
     this.pickWaypoint();
     const tired = this.stats.energy < TIRED_AT;
     const span = FLY_TIME_MIN + Math.random() * (FLY_TIME_MAX - FLY_TIME_MIN);
@@ -1007,8 +1145,8 @@ class Pet {
       this.pickWaypoint();
       return;
     }
-    // Flap-glide cycle: bursts of wingbeats, then locked-wing glides.
-    // Final approach always glides; far-below-target forces flapping.
+    // Mostly flap, brief glides: long wingbeat bursts with short
+    // locked-wing breaks. Final approach always glides in.
     const landing = this.flyToY <= 0 && this.flyY > 30;
     if (landing) {
       this.airPhase = "glide";
@@ -1036,6 +1174,10 @@ class Pet {
     this.flyVY += Math.min(Math.max(desY - this.flyVY, -maxDv), maxDv);
     this.x = this.clampX(this.x + this.flyVX * dt);
     this.flyY = this.clampY(this.flyY + this.flyVY * dt);
+    // Mid-air relief: high enough and room for another pile.
+    if (this.flyY > 60 && this.piles.length < MAX_POOPS_PER_PET && Math.random() < dt * AIR_POOP_PER_SEC) {
+      dropFalling(this);
+    }
     if (Math.abs(this.flyVX) > 10) this.dir = this.flyVX > 0 ? 1 : -1;
     this.renderPosition(now);
     maybePushPos(now);
@@ -1160,6 +1302,16 @@ class Pet {
       this.setFrame(tick % 2 === 0 ? f.eat : f.happy[0]);
       return;
     }
+    // Very rare solo states override everything but meals (and yield to
+    // sleep/socials by expiring).
+    if (this.rareKind && (now >= this.rareUntil || this.sleeping() || socialActive(now))) {
+      this.rareKind = null;
+    }
+    if (!this.rareKind && now >= this.nextRareAt) this.maybeStartRare(now);
+    if (this.rareKind) {
+      this.animateRare(now);
+      return;
+    }
     // Spontaneous songs (rare): roll the next attempt, start if idle.
     if (now >= this.nextSongAt) {
       this.nextSongAt = now + SONG_MIN_MS + Math.random() * SONG_WINDOW_MS;
@@ -1201,9 +1353,10 @@ class Pet {
       this.setFrame(f.jump[p < 0.5 ? 0 : 1]);
       return;
     }
-    // Sleeping: Z's drift slowly.
+    // Sleeping: Z's drift slowly; cats purr, everyone else snores.
     if (this.sleeping()) {
-      playSnore();
+      if (this.skinId === "cat") playPurr();
+      else playSnore();
       this.setFrame(f.sleep[tick % 4 < 2 ? 0 : 1]);
       return;
     }
@@ -1612,7 +1765,7 @@ function startTrioScene(kind: TrioKind, parts: Pet[], dur: number, now: number):
       else p.sniffUntil = 0;
     }
     for (const p of parts) p.startJump(0.7);
-    social = { kind, since: now, until, nextBeat: now + dur / 2, beat: 0, dir, whooped: false, slots: parts.map((p) => p.slot) };
+    social = { kind, since: now, until, nextBeat: now + 300, beat: 0, dir, whooped: false, slots: parts.map((p) => p.slot) };
     showMsg(`${listLabels(parts)} — ${pickMsg(["маршируют!", "устроили парад!"])}`);
     playSocial("parade", lead.skinId);
     playPetSound(lead.skinId);
@@ -1654,7 +1807,13 @@ function trioStep(parts: Pet[], now: number): void {
     for (const p of parts) {
       if (p.leaper() && !p.jumping(now) && now >= p.nextHopAt - 200) sceneHop(p, 1);
     }
-    if (!s.whooped && now >= s.nextBeat) {
+    // Marching drums on every step; the whoop lands halfway through.
+    if (now >= s.nextBeat) {
+      s.beat += 1;
+      s.nextBeat = now + 300;
+      playMarchDrum(s.beat % 2 === 0);
+    }
+    if (!s.whooped && now >= s.since + (s.until - s.since) / 2) {
       s.whooped = true;
       const who = parts[Math.floor(Math.random() * parts.length)];
       if (who) playPetSound(who.skinId);
@@ -1735,6 +1894,7 @@ function socialStep(now: number): void {
       s.nextBeat = now + HAPPY_FRAME_MS;
       a.startJump(0.5);
       b.startJump(0.5);
+      playDanceTick(s.beat % 2 === 0);
       if (s.beat % 4 === 0) playPetSound(s.beat % 8 === 0 ? a.skinId : b.skinId);
     }
   } else if (s.kind === "sniff") {
@@ -2058,6 +2218,7 @@ function frame(): void {
   socialStep(now);
   checkChat(now);
   for (const p of pets) p.step(dt, now);
+  stepFallings(dt);
 }
 requestAnimationFrame(frame);
 

@@ -29,6 +29,7 @@ const cLogin = document.getElementById("c-login") as HTMLInputElement;
 const cFps = document.getElementById("c-fps") as HTMLInputElement;
 const cShadows = document.getElementById("c-shadows") as HTMLInputElement;
 const volumeEl = document.getElementById("volume") as HTMLInputElement;
+const updStatusEl = document.getElementById("upd-status") as HTMLSpanElement;
 
 /** Last snapshot from main (drives dependent controls like the pack pair). */
 let current: SettingsSnapshot | null = null;
@@ -90,6 +91,13 @@ function applyToForm(s: SettingsSnapshot): void {
   cFps.checked = !!s.fpsMeter;
   cShadows.checked = s.shadows !== false;
   volumeEl.value = String(Math.round((typeof s.volume === "number" && isFinite(s.volume) ? s.volume : 1) * 100));
+  const UPD_STATUS_TEXT: Record<string, string> = {
+    idle: "актуально",
+    available: "скачивается…",
+    downloaded: "готово — перезапусти!",
+    error: "недоступны",
+  };
+  updStatusEl.textContent = UPD_STATUS_TEXT[s.updateStatus] ?? "";
 }
 
 pet0El.addEventListener("change", () => {

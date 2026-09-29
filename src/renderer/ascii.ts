@@ -595,7 +595,7 @@ export const SLEEP = CAT_SLEEP[0];
 // Shared poop pile (one per pet max). Bottom-aligned with the pets, so no
 // leading blank lines: the pile's baseline is the strip's ground line for
 // every skin, whatever its native height.
-export const POOP: string = ["  _   ", " (_)  ", "(___)  "].join("\n");
+export const POOP: string = ["     _     ", "   _(_)_   ", "__ (___) __"].join("\n");
 
 // Stink waves curling over the pile: 4 rows tall, drifting sideways.
 // Cycled ~every 400ms by the renderer (one .stink element per pile).
@@ -607,7 +607,7 @@ export const POOP_STINK: string[] = [
 
 // Pixel pile for the Tamagotchi style (ascii3); the stink waves above it
 // are shared. Other styles use the classic POOP.
-export const POOP3: string = ["      ███", "    █████", "  ███████"].join("\n");
+export const POOP3: string = ["    ███    ", "  ███████  ", "███████████"].join("\n");
 
 /** Pile art for a drawing style. Unknown styles fall back to the classic pile. */
 export function poopFor(style: string): string {

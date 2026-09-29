@@ -135,6 +135,12 @@
   #updates:hover {
     background: rgba(154, 215, 255, 0.22);
   }
+  #upd-status {
+    align-self: center;
+    font-size: 11px;
+    color: #8f8f9a;
+    white-space: nowrap;
+  }
 </style>
 </head>
 <body>
@@ -163,7 +169,7 @@
     <label class="check"><input type="checkbox" id="c-login" />Запускать с Windows</label>
     <label class="check"><input type="checkbox" id="c-fps" />Счётчик FPS</label>
   </div>
-  <div id="foot"><button id="updates">Проверить обновления</button></div>
+  <div id="foot"><button id="updates">Проверить обновления</button><span id="upd-status"></span></div>
 </div>
 <script src="./settings.js"></script>
 </body>
