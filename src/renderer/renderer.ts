@@ -284,6 +284,8 @@ class Pet {
   slowUntil = 0;
   jumpStart = -JUMP_MS;
   jumpHeight = 40;
+  /** Jump airtime (ms): the bird snaps through short hops, everyone else floats. */
+  jumpDur = JUMP_MS;
   /** Walk-cycle phase: advances with travelled distance (PI per stride frame). */
   bobPhase = 0;
   /** px travelled since the last walk-frame advance. */
@@ -344,6 +346,8 @@ class Pet {
     this.gridW = Math.max(...base.map((r) => r.length));
     this.stats = loadStats(slot, Date.now());
     this.temp = jitterTemperament(temperamentForSlot(slot), [Math.random(), Math.random(), Math.random()]);
+    // The bird snaps through short hops (220ms); everyone else floats (600ms).
+    if (this.flyer()) this.jumpDur = 220;
     this.jumpHeight = this.temp.jumpHeight;
     this.nextBlink = Date.now() + 2000 + Math.random() * 3000;
     this.decideUntil = Date.now() + this.temp.decisionMinMs;
@@ -425,7 +429,9 @@ class Pet {
     if (!this.flyer()) {
       this.flyMode = "perch";
       this.flyY = 0;
+      this.jumpDur = JUMP_MS;
     } else {
+      this.jumpDur = 220;
       this.nextTakeoffAt = Date.now() + 1500 + Math.random() * 2000;
     }
     this.shownText = null;
@@ -457,19 +463,22 @@ class Pet {
   }
 
   jumping(now: number): boolean {
-    return now - this.jumpStart < JUMP_MS;
+    return now - this.jumpStart < this.jumpDur;
   }
 
-  /** Parabola 0 -> -height -> 0 over JUMP_MS. */
+  /** Parabola 0 -> -height -> 0 over the pet's jump airtime. */
   jumpY(now: number): number {
     if (!this.jumping(now)) return 0;
-    const p = (now - this.jumpStart) / JUMP_MS;
+    const p = (now - this.jumpStart) / this.jumpDur;
     return -this.jumpHeight * 4 * p * (1 - p);
   }
 
   startJump(heightScale = 1, anchor = true): void {
     this.jumpStart = Date.now();
     this.jumpHeight = this.temp.jumpHeight * heightScale;
+    // The bird hops small: halve every bounce arc (floor shuffles, frights,
+    // social bounces) — it flies instead of jumping.
+    if (this.flyer()) this.jumpHeight *= 0.5;
     // Sitters travel via hopFromX -> hopToX: an external bounce (petting,
     // socials, startle) must jump in place instead of replaying a stale path
     // (which teleported the frog across the strip). hopStep/flyStep opt out
@@ -1019,8 +1028,8 @@ class Pet {
       this.cruiseStep(dt, now);
       return;
     }
-    // Perched: short flap-hops along the floor (the old leap charm).
-    this.leapStep(now, 2.2, 1.7);
+    // Perched: tiny sharp shuffles along the floor (short, low and quick).
+    this.leapStep(now, 0.35, 0.5);
     if (now >= this.nextTakeoffAt && !this.sleeping() && !socialActive(now)) {
       this.takeOff(now);
     }
@@ -1033,7 +1042,7 @@ class Pet {
     if (this.jumping(now)) {
       // Travel through the air along the parabola progress.
       // easeOutQuad: explosive takeoff, soft landing.
-      const p = Math.min(1, Math.max(0, (now - this.jumpStart) / JUMP_MS));
+      const p = Math.min(1, Math.max(0, (now - this.jumpStart) / this.jumpDur));
       const e = 1 - (1 - p) * (1 - p);
       this.x = this.hopFromX + (this.hopToX - this.hopFromX) * e;
       this.renderPosition(now);
@@ -1054,7 +1063,7 @@ class Pet {
     this.startJump(heightScale, false);
     const [plo, phi] = this.temp.hopPause;
     const pause = plo + Math.random() * (phi - plo);
-    this.nextHopAt = Date.now() + JUMP_MS + (tired ? pause * 1.8 : pause);
+    this.nextHopAt = Date.now() + this.jumpDur + (tired ? pause * 1.8 : pause);
   }
 
   /** Per-frame movement (dt seconds). The ONLY transform writer besides drag. */
@@ -1155,7 +1164,7 @@ class Pet {
     // Jump: tuck on the way up, stretch on the way down.
     // (Position stays with step()/hopStep() — animate only picks frames.)
     if (this.jumping(now)) {
-      const p = (now - this.jumpStart) / JUMP_MS;
+      const p = (now - this.jumpStart) / this.jumpDur;
       this.setFrame(f.jump[p < 0.5 ? 0 : 1]);
       return;
     }
@@ -1417,7 +1426,7 @@ function sceneHop(p: Pet, mult = 1): void {
     p.hopToX = p.clampX(p.x + p.dir * len);
   }
   p.startJump(1, false);
-  p.nextHopAt = Date.now() + JUMP_MS + 120;
+  p.nextHopAt = Date.now() + p.jumpDur + 120;
 }
 
 /** "A, B и C" listing for trio messages. */
@@ -1872,7 +1881,7 @@ window.addEventListener("mouseup", () => {
       thrown.hopFromX = thrown.x;
       thrown.hopToX = thrown.clampX(thrown.x + thrown.dir * Math.min(320, speed * 0.22));
       thrown.startJump(1.2, false);
-      thrown.nextHopAt = now + JUMP_MS + 300;
+      thrown.nextHopAt = now + thrown.jumpDur + 300;
     } else {
       thrown.flingV = speed;
       thrown.flingUntil = now + FLING_MS;

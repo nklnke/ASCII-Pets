@@ -822,7 +822,7 @@ function setShowStatus(v: boolean): void {
   }
 }
 
-/** Fit the status window to the reported card height (1–3 pets). */
+/** Fit the status window to the reported card height (1–4 pets). */
 function fitStatusWindow(cardH: number): void {
   if (!statusWin || statusWin.isDestroyed()) return;
   if (typeof cardH !== "number" || !isFinite(cardH)) return;

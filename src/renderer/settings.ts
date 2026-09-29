@@ -15,6 +15,7 @@ function scaleLabel(s: number): string {
 const pet0El = document.getElementById("pet0") as HTMLSelectElement;
 const pet1El = document.getElementById("pet1") as HTMLSelectElement;
 const pet2El = document.getElementById("pet2") as HTMLSelectElement;
+const pet3El = document.getElementById("pet3") as HTMLSelectElement;
 const styleEl = document.getElementById("style") as HTMLSelectElement;
 const displayEl = document.getElementById("display") as HTMLSelectElement;
 const scalesEl = document.getElementById("scales") as HTMLSpanElement;
@@ -44,6 +45,7 @@ function fillSelect(el: HTMLSelectElement, options: Array<{ value: string; label
 fillSelect(pet0El, SKIN_LIST.map((s) => ({ value: s.id, label: s.name })));
 fillSelect(pet1El, [{ value: "", label: "Нет" }, ...SKIN_LIST.map((s) => ({ value: s.id, label: s.name }))]);
 fillSelect(pet2El, [{ value: "", label: "Нет" }, ...SKIN_LIST.map((s) => ({ value: s.id, label: s.name }))]);
+fillSelect(pet3El, [{ value: "", label: "Нет" }, ...SKIN_LIST.map((s) => ({ value: s.id, label: s.name }))]);
 fillSelect(styleEl, STYLE_LIST.map((s) => ({ value: s.id, label: s.name })));
 
 const scaleLabels: HTMLLabelElement[] = [];
@@ -68,6 +70,7 @@ function applyToForm(s: SettingsSnapshot): void {
   if (Array.isArray(s.pack) && s.pack[0]) pet0El.value = s.pack[0];
   pet1El.value = Array.isArray(s.pack) && s.pack[1] ? s.pack[1] : "";
   pet2El.value = Array.isArray(s.pack) && s.pack[2] ? s.pack[2] : "";
+  pet3El.value = Array.isArray(s.pack) && s.pack[3] ? s.pack[3] : "";
   styleEl.value = s.style;
   applyDisplayId(s.displayId);
   scaleLabels.forEach((label, i) => {
@@ -95,6 +98,7 @@ pet1El.addEventListener("change", () => {
   const next = [cur[0] ?? "cat"];
   if (pet1El.value) next.push(pet1El.value);
   if (cur[2]) next.push(cur[2]);
+  if (cur[3]) next.push(cur[3]);
   window.petAPI?.setSettings({ pack: next });
 });
 pet2El.addEventListener("change", () => {
@@ -102,6 +106,15 @@ pet2El.addEventListener("change", () => {
   const next = [cur[0] ?? "cat"];
   if (cur[1]) next.push(cur[1]);
   if (pet2El.value) next.push(pet2El.value);
+  if (cur[3]) next.push(cur[3]);
+  window.petAPI?.setSettings({ pack: next });
+});
+pet3El.addEventListener("change", () => {
+  const cur = current?.pack ?? ["cat"];
+  const next = [cur[0] ?? "cat"];
+  if (cur[1]) next.push(cur[1]);
+  if (cur[2]) next.push(cur[2]);
+  if (pet3El.value) next.push(pet3El.value);
   window.petAPI?.setSettings({ pack: next });
 });
 styleEl.addEventListener("change", () => {

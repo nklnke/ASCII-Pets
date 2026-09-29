@@ -20,7 +20,7 @@ export const SKIN_LIST: SkinMeta[] = [
 ];
 
 export const DEFAULT_SKIN = "cat";
-export const MAX_PETS = 3;
+export const MAX_PETS = 4;
 
 /** Normalize a pack (array of skin ids) from settings/menu/IPC. */
 export function normalizePack(skins: unknown): string[] {

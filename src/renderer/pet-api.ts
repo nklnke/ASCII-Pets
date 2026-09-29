@@ -47,7 +47,7 @@ export interface PetApi {
   checkForUpdates: () => void;
   /** Settings window: report the card height so main can shrink-wrap the window. */
   reportSettingsSize: (height: number) => void;
-  /** Status window: report the card height so main can fit 1–3 pets. */
+  /** Status window: report the card height so main can fit 1–4 pets. */
   reportStatusSize: (height: number) => void;
   /** Monitor picker: dynamic display list. */
   getDisplays: () => Promise<DisplayOption[]>;

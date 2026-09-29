@@ -104,7 +104,7 @@ void window.petAPI?.getSettings?.().then((s) => {
   fpsEl.style.display = showFps ? "" : "none";
 });
 
-/** Tell main the real card height so it can fit 1–3 pets (only on change). */
+/** Tell main the real card height so it can fit 1–4 pets (only on change). */
 let lastStatusH = 0;
 function reportSize(): void {
   const card = document.getElementById("card");
