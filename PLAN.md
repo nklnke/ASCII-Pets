@@ -51,3 +51,10 @@ assets/sprites/<packId>/
 - все 4 растр-пета ходят/спят/едят/прыгают;
 - масштаб 85–160% держит якорь к полу, без замыливания заглушек;
 - тултип/сэмплер без мусора, пауза/звук/социалки работают как в ASCII.
+
+## 8. Улучшения Electron (по Context7: `/electron/electron`, `/electron-userland/electron-builder`)
+1. **Stage `backgroundThrottling: false`** (`main.ts:750`, только stage): без него Chromium троттлит rAF на нефокусном прозрачном окне во весь `workArea` — растр дёргается. В status/settings не добавлять.
+2. **Апдейтер: прогресс + лог** (`main.ts:566-613`): есть ручной флоу `error → update-downloaded → quitAndInstall` (без двойного тоста) — добавить `download-progress` → % в окно настроек, `electron-log` в файл, явно `allowPrerelease: false`. Сейчас отказ тихий, не диагностируется.
+3. **Сэмплер: `prefers-reduced-transparency`** — полноэкранный transparent + `desktopCapturer` 640×360 самое дорогое место; деградация 2→5с уже есть, дальше опция «не семплить вообще» для слабых GPU. Растр сэмплер не трогает (см. §4 Fallback).
+4. **Тултип: троттлинг `setToolTip`** (`main.ts:661`): сейчас на каждый `pushStats` — обновлять не чаще 1–2с / при изменении строки.
+5. **Растр + NSIS:** иконки пака через `nativeImage` + `tray.setImage` с fallback; предзагрузка `new Image()` с кешем; проверить `differentialPackage`, чтобы паки не раздули дифф-обновление.
